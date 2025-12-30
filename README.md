@@ -2,7 +2,7 @@
 
 Pipeline:
 
-1. [ ] Data Collection
+1. [X] Data Collection
 2. [ ] Data Augmentation
 3. [ ] Dataset Filtering
 4. [ ] Teacher Action Generation
