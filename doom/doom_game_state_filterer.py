@@ -1,4 +1,4 @@
-from datasets import GamePalsDatasetTransformer, GamePalsDataset
+from core.datasets import GamePalsDatasetTransformer, GamePalsDataset
 from .doom_game_state import DoomGameState
 
 
@@ -21,10 +21,10 @@ class DoomGameStateFilterer(GamePalsDatasetTransformer):
         :param x: a gamepals dataset
         :return: the new gamepals dataset
         """
-        new_x: list[DoomGameState] = list()
+        new_x = GamePalsDataset()
         for state in x:
             if len(state.MONSTERS) > 0:
                 new_x.append(state)
             elif state.AIMED_AT.interactable:
                 new_x.append(state)
-        return GamePalsDataset[DoomGameState](new_x)
+        return new_x

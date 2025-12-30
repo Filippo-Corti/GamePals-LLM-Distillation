@@ -2,7 +2,7 @@ from typing import Callable, Any, Iterable
 from sklearn.cluster import DBSCAN
 import numpy as np
 
-from datasets import GamePalsDatasetTransformer, GamePalsDataset
+from core.datasets import GamePalsDatasetTransformer, GamePalsDataset
 
 
 class DatasetClusterer(GamePalsDatasetTransformer):
@@ -38,7 +38,7 @@ class DatasetClusterer(GamePalsDatasetTransformer):
         )
         labels = clustering.fit_predict(features)
 
-        new_x = list()
+        new_x = GamePalsDataset()
         for cluster_id in set(labels):
             if cluster_id == -1: continue
 
@@ -48,10 +48,10 @@ class DatasetClusterer(GamePalsDatasetTransformer):
             # Compute centroid
             centroid = cluster_features.mean(axis=0)
 
-            # Find closest item to centroid
+            # Find the closest item to centroid
             distances = np.linalg.norm(cluster_features - centroid, axis=1)
             center_idx = cluster_indices[np.argmin(distances)]
 
             new_x.append(x[center_idx])
 
-        return GamePalsDataset(new_x)
+        return new_x

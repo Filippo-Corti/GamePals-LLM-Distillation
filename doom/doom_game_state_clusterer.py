@@ -1,10 +1,8 @@
-from typing import Callable, Counter
-from sklearn.cluster import AgglomerativeClustering
+from typing import Counter
 import numpy as np
 
-from datasets import GamePalsDataset
 from .doom_game_state import DoomGameState, MonsterType, WeaponName, AimedAtType
-from knowledge.dataset_clusterer import DatasetClusterer
+from core.knowledge.dataset_clusterer import DatasetClusterer
 
 
 class DoomGameStateClusterer(DatasetClusterer):
@@ -15,7 +13,7 @@ class DoomGameStateClusterer(DatasetClusterer):
     def __init__(self):
         """Creates a DoomGameStateClusterer"""
         super().__init__(
-            to_features=DoomGameStateClusterer.to_features
+            to_features=self.to_features
         )
 
     @staticmethod
