@@ -2,6 +2,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel
 
+
 class WeaponName(StrEnum):
     FIST = 'Fist',
     CHAINSAW = 'Chainsaw',
@@ -13,6 +14,7 @@ class WeaponName(StrEnum):
     PLASMA_RIFLE = 'Plasma Rifle',
     BFG9000 = 'BFG900',
     NONE = ''
+
 
 class MonsterType(StrEnum):
     ZOMBIEMAN = 'Zombieman',
@@ -26,6 +28,7 @@ class MonsterType(StrEnum):
     CYBERDEMON = 'Cyberdemon'
     SPIDER_MASTERMIND = 'SpiderMastermind'
 
+
 class AimedAtType(StrEnum):
     ACTOR = 'Actor'
     MONSTER = 'Monster'
@@ -33,6 +36,7 @@ class AimedAtType(StrEnum):
     CEILING = 'Ceiling'
     FLOOR = 'Floor'
     UNKNOWN = 'Unknown'
+
 
 class GroundCheckModel(BaseModel):
     isSprinting: bool
@@ -82,4 +86,3 @@ class DoomGameState(BaseModel):
     MONSTERS: list[MonsterModel]
     INVENTORY: InventoryModel
     GROUND_CHECK: GroundCheckModel
-
