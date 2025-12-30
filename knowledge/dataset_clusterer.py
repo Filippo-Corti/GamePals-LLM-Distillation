@@ -1,5 +1,5 @@
 from typing import Callable, Any, Iterable
-from sklearn.cluster import AgglomerativeClustering
+from sklearn.cluster import DBSCAN
 import numpy as np
 
 from datasets import GamePalsDatasetTransformer, GamePalsDataset
@@ -29,12 +29,12 @@ class DatasetClusterer(GamePalsDatasetTransformer):
         :param x: a gamepals dataset
         :return: the new gamepals dataset
         """
-        features = np.array([self.to_features(item) for item in x])
+        features = np.array([self.to_features(item) for item in x], dtype=np.float32)
 
-        clustering = AgglomerativeClustering(
-            n_clusters=None,
-            distance_threshold=1e-2,
-            linkage='average'
+        clustering = DBSCAN(
+            eps=1e-2,
+            min_samples=1,
+            metric="euclidean",
         )
         labels = clustering.fit_predict(features)
 
@@ -55,4 +55,3 @@ class DatasetClusterer(GamePalsDatasetTransformer):
             new_x.append(x[center_idx])
 
         return GamePalsDataset(new_x)
-

@@ -27,5 +27,6 @@ dataset = dataset.apply(
 )
 
 print(len(dataset))
+print(dataset[16])
 
 
