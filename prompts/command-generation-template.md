@@ -10,8 +10,11 @@ gaming assistant to execute for them.
 <GAME_DESCRIPTION>
 
 ## Input Format
-You will receive a game state as input, the game state will have the following format:
-<GAME_STATE_FORMAT_DESCRIPTION>
+You will receive a game state as input.
+<GAME_STATE_SEMANTICS>
+
+The game state is provided as structured text using the following format.
+<GAME_STATE_FORMAT>
 
 ## Output Format
 Your output should consist in a series of user commands that the player might want their gaming assistant to

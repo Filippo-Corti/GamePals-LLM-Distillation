@@ -91,6 +91,11 @@ class DoomGameState(BaseModel):
     # TODO: method to transform into prompt-ready format
     # TODO: Potentially abstract GameState class?
     def to_prompt_ready(self) -> str:
+        """
+        Returns the string representation of the game state, ready to be prompted to an LLM.
+
+        :return: the string representation of the game state
+        """
         d = self.model_dump()
         del d['GROUND_CHECK']
         del d['AIMED_AT']['horizontalAngle']
@@ -107,4 +112,48 @@ class DoomGameState(BaseModel):
         ]
         for w in d['INVENTORY']['inventorySlots']:
             del w['canUse']
-        return json.dumps(d)
+        return self.toonify(d)
+
+    @staticmethod
+    def toonify(state: dict) -> str:
+        """
+        Translates the dictionary representation of the game state into a string representation,
+        following a convention similar to the TOON-Format.
+
+        :param state: the dictionary representation of the game state
+        :return: the TOON-formatted string representation of the game state
+        """
+        lines = list()
+
+        # --- AIMED_AT ---
+        aimed = state["AIMED_AT"]
+        lines.append("AIMED_AT:")
+        lines.append(f"  type: {aimed['entityType']}")
+        lines.append(f"  distance: {aimed['distance']:.2f}")
+        lines.append(f"  interactable: {'yes' if aimed['interactable'] else 'no'}")
+        lines.append("")
+
+        # --- MONSTERS ---
+        monsters = state.get("MONSTERS", [])
+        lines.append(f"MONSTERS (count={len(monsters)}):")
+        for m in monsters:
+            lines.append(
+                f"  - ({m['monsterType']}, "
+                f"{m['monsterHealth']}, "
+                f"{m['distance']:.2f}, "
+                f"{m['relativeAngle']:.2f}, "
+                f"{m['relativePitch']:.2f})"
+            )
+        lines.append("")
+
+        # --- INVENTORY ---
+        inv = state["INVENTORY"]
+        lines.append("INVENTORY:")
+        lines.append(f"  current_slot: {inv['currentSlot']}")
+        lines.append("  weapons:")
+        for w in inv["inventorySlots"]:
+            lines.append(
+                f"    - ({w['index']}, {w['weaponName']}, {w['ammoCount']})"
+            )
+
+        return "\n".join(lines)
