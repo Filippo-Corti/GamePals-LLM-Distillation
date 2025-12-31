@@ -30,9 +30,9 @@
     "AIMED_AT:\n  type: Wall\n  distance: 100.33\n  interactable: no\n\nMONSTERS (count=1):\n  - (DoomImp, 60, 968.24, -10.56, 12.32)\n\nINVENTORY:\n  current_slot: 2\n  weapons:\n    - (1, Fist, 0)\n    - (2, Pistol, 33)"
   ],
   "COMMAND_GEN_EXAMPLE1_OUTPUT": [
-    "{\"command\":\"Shoot the imp in front of me\",\"intent\":\"Eliminate the nearby hostile monster\",\"explicitness\":0.75,\"atomicity\":0.45,\"contextuality\":0.85}",
-    "{\"command\":\"Aim at the monster\",\"intent\":\"Align the crosshair with the visible monster\",\"explicitness\":0.8,\"atomicity\":0.3,\"contextuality\":0.85}",
-    "{\"command\":\"Help me\",\"intent\":\"Receive assistance in handling the current combat threat\",\"explicitness\":0.05,\"atomicity\":0.55,\"contextuality\":0.95}"
+    "{\"command\": \"Shoot the imp in front of me\", \"intent\": \"Eliminate the nearby hostile monster\", \"explicitness\": 0.75, \"atomicity\": 0.45, \"contextuality\": 0.85}",
+    "{\"command\": \"Aim at the monster\", \"intent\": \"Align the crosshair with the visible monster\", \"explicitness\": 0.8, \"atomicity\": 0.3, \"contextuality\": 0.85}",
+    "{\"command\": \"Help me\", \"intent\": \"Receive assistance in handling the current combat threat\", \"explicitness\": 0.05, \"atomicity\": 0.55, \"contextuality\": 0.95}"
   ],
   "COMMAND_GEN_EXAMPLE2_INPUT": [
     "GAME STATE:",
@@ -40,7 +40,7 @@
     "AIMED_AT:\n  type: Wall\n  distance: 330.86\n  interactable: yes\n\nMONSTERS (count=0):\n\nINVENTORY:\n  current_slot: 1\n  weapons:\n    - (1, Fist, 0)\n    - (2, Pistol, 50)"
   ],
   "COMMAND_GEN_EXAMPLE2_OUTPUT": [
-    "{\"command\":\"Go to the button and activate it\",\"intent\":\"Move closer to the interactable wall and trigger its interaction\",\"explicitness\":0.8,\"atomicity\":0.4,\"contextuality\":0.85}",
-    "{\"command\":\"Switch to my best weapon\",\"intent\":\"Select a good weapon as the active weapon\",\"explicitness\":0.3,\"atomicity\":0.8,\"contextuality\":0.1}"
+    "{\"command\": \"Go to the button and activate it\", \"intent\": \"Move closer to the interactable wall and trigger its interaction\", \"explicitness\": 0.8, \"atomicity\": 0.4, \"contextuality\": 0.85}",
+    "{\"command\": \"Switch to my best weapon\", \"intent\": \"Improve combat readiness by changing weapon\", \"explicitness\": 0.3, \"atomicity\": 0.8, \"contextuality\": 0.1}"
   ]
 }
