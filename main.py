@@ -42,5 +42,8 @@ from doom.utils.doom_game_state import DoomGameState
 dataset = GamePalsDataset.load('data/gamestates/perturbated-gamestates.json', cls=DoomGameState)
 
 print(len(dataset))
-print(dataset[16])
-print(dataset[16].to_prompt_ready())
+print(dataset[167])
+for item in dataset:
+    if item.AIMED_AT.interactable:
+        print(item.to_prompt_ready())
+        break
