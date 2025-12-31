@@ -8,13 +8,21 @@
     "During their exploration, the player can stumble into objects (such as weapons and keys), interactable elements (such as buttons and doors)",
     "and most importantly monsters of various strengths and sizes."
   ],
-  "GAME_STATE_FORMAT_DESCRIPTION": [
+  "GAME_STATE_SEMANTICS": [
     "The game state for The Ultimate Doom contains the following information about the environment surrounding the player:",
-    "- MONSTERS is the list of monsters surrounding the player. For each monster, the game state reports information about their type and their location (both in the 3D space and w.r.t the player's crosshair).",
-    "  In particular, the fields relativeAngle and relativePitch determine the on-screen distance between the crosshair and the monster",
     "- AIMED_AT represents what is currently behind the player's crosshair. This can either be a monster, another actor, a wall, the floor, the ceiling or unknown.",
     "  The field 'interactable' determines whether the action 'interact' has an effect when execute next to the object. For instance, if the crosshair is on a button 'interactable' will likely be true.",
+    "- MONSTERS is the list of monsters surrounding the player. For each monster, the game state reports information about their type and their location (both in the 3D space and w.r.t the player's crosshair).",
+    "  In particular, the fields relativeAngle and relativePitch determine the on-screen distance between the crosshair and the monster",
     "- INVENTORY contains the list of available weapons and the currently selected weapon slot. Only weapons with a number of ammunition greater than zero can be selected for use."
+  ],
+  "GAME_STATE_FORMAT": [
+    "Distances are expressed in game units.",
+    "Angles are expressed in degrees.",
+    "",
+    "AIMED_AT:\n  type: <entity_type>\n  distance: <float>\n  interactable: <yes/no>",
+    "MONSTERS:\n  - (<monster_type>, <health>, <distance>, <relative_angle>, <relative_pitch>)",
+    "INVENTORY:\n  current_slot: <int>\n  weapons:\n    - (<slot>, <weapon_name>, <ammo_count>)",
   ],
   "COMMAND_GEN_EXAMPLE1_INPUT": [
     "GAME STATE:",
