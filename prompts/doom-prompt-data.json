@@ -1,0 +1,27 @@
+{
+  "GAME_NAME": "The Ultimate Doom",
+  "GAME_DESCRIPTION": [
+    "The Ultimate Doom is a first-person shooter game in which the player assumes the role of a space marine, fighting monsters through different episodes and levels.",
+    "Players control their avatar through seven main actions: movement, direction, shooting, jumping, interacting, running and switching weapons.",
+    "To finish a level, the player must navigate a labyrinthine network of rooms and corridors, until the exit room is reached.",
+    "The game does not provide information about where to go or what to do. It is up to the player to find the way to the exit room.",
+    "During their exploration, the player can stumble into objects (such as weapons and keys), interactable elements (such as buttons and doors)",
+    "and most importantly monsters of various strengths and sizes."
+  ],
+  "GAME_STATE_FORMAT_DESCRIPTION": [
+    "The game state for The Ultimate Doom contains the following information about the environment surrounding the player:",
+    "- MONSTERS is the list of monsters surrounding the player. For each monster, the game state reports information about their type and their location (both in the 3D space and w.r.t the player's crosshair).",
+    "  In particular, the fields relativeAngle and relativePitch determine the on-screen distance between the crosshair and the monster",
+    "- AIMED_AT represents what is currently behind the player's crosshair. This can either be a monster, another actor, a wall, the floor, the ceiling or unknown.",
+    "  The field 'interactable' determines whether the action 'interact' has an effect when execute next to the object. For instance, if the crosshair is on a button 'interactable' will likely be true.",
+    "- INVENTORY contains the list of available weapons and the currently selected weapon slot. Only weapons with a number of ammunition greater than zero can be selected for use."
+  ],
+  "COMMAND_GEN_EXAMPLE1_INPUT": [
+    "GAME STATE:",
+    "",
+    "MONSTERS"
+  ],
+  "COMMAND_GEN_EXAMPLE1_OUTPUT": "",
+  "COMMAND_GEN_EXAMPLE2_INPUT": "",
+  "COMMAND_GEN_EXAMPLE2_OUTPUT": ""
+}
