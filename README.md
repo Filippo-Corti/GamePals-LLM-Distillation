@@ -45,6 +45,11 @@ labelled_dataset = teacher.elicit_knowledge(
     )
 )
 
+The Teacher should:
+> Receive the dataset of game states (already transformed to its final form I would say)
+> Have a method that performs Data Curation (creates the user commands for the game states)
+> Have a method that performs Labeling (creates outputs given game states + user commands)
+
 
 
 

@@ -86,3 +86,6 @@ class DoomGameState(BaseModel):
     MONSTERS: list[MonsterModel]
     INVENTORY: InventoryModel
     GROUND_CHECK: GroundCheckModel
+
+    # TODO: method to transform into prompt-ready format
+    # TODO: Potentially abstract GameState class?

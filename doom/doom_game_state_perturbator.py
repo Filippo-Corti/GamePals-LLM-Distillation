@@ -10,7 +10,7 @@ class DoomGameStatePerturbator(DatasetPerturbator):
     """
     A DatasetPerturbator specialized for doom game states
     """
-    N_MONSTER_PERTURBATIONS = 3
+    N_MONSTER_PERTURBATIONS = 2
     N_AMMO_PERTURBATIONS = 2
     DROP_PROBABILITY = 0.3
 

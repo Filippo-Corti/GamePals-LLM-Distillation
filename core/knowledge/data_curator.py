@@ -1,5 +1,0 @@
-
-class UserCommandsGenerator(GamepalsDatasetTransformer):
-    pass
-
-
