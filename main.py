@@ -1,6 +1,7 @@
 import os
 
 from core.datasets import GamePalsDataset
+from doom.kd.doom_teacher import DoomTeacher, DoomTeacherOptions
 from doom.preprocessing.doom_game_state_clusterer import DoomGameStateClusterer
 from doom.preprocessing.doom_game_state_filterer import DoomGameStateFilterer
 from doom.preprocessing.doom_game_state_perturbator import DoomGameStatePerturbator
@@ -42,8 +43,14 @@ from doom.utils.doom_game_state import DoomGameState
 dataset = GamePalsDataset.load('data/gamestates/perturbated-gamestates.json', cls=DoomGameState)
 
 print(len(dataset))
-print(dataset[167])
-for item in dataset:
-    if item.AIMED_AT.interactable:
-        print(item.to_prompt_ready())
-        break
+
+teacher = DoomTeacher(
+    game_states=dataset,
+    options=DoomTeacherOptions(
+        prompt_data_filepath='prompts/doom-prompt-data.json',
+        open_ai_model='gpt-5.1'
+    )
+)
+
+generation_prompt = open('prompts/command-generation-template.md', 'r').read()
+teacher.generate_user_commands(generation_prompt)
