@@ -24,7 +24,7 @@ class GamePalsDataset(Generic[T]):
     def append(self, item: T) -> None:
         self.items.append(item)
 
-    def apply(self, transform: "GamepalsDatasetTransformer") -> "GamePalsDataset":
+    def apply(self, transform: "GamePalsDatasetTransformer") -> "GamePalsDataset":
         return transform.transform(self)
 
     def save(self, path: str):
