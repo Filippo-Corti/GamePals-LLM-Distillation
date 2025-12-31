@@ -1,3 +1,4 @@
+import json
 from enum import StrEnum
 
 from pydantic import BaseModel
@@ -89,3 +90,21 @@ class DoomGameState(BaseModel):
 
     # TODO: method to transform into prompt-ready format
     # TODO: Potentially abstract GameState class?
+    def to_prompt_ready(self) -> str:
+        d = self.model_dump()
+        del d['GROUND_CHECK']
+        del d['AIMED_AT']['horizontalAngle']
+        del d['AIMED_AT']['verticalAngle']
+        for m in d['MONSTERS']:
+            del m['monsterMass']
+            del m['inFOV']
+            del m['screenX']
+            del m['screenY']
+        d['INVENTORY']['inventorySlots'] = [
+            w
+            for w in d['INVENTORY']['inventorySlots']
+            if w['canUse']
+        ]
+        for w in d['INVENTORY']['inventorySlots']:
+            del w['canUse']
+        return json.dumps(d)

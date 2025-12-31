@@ -1,5 +1,5 @@
 from core.datasets import GamePalsDatasetTransformer, GamePalsDataset
-from .doom_game_state import DoomGameState
+from doom.utils.doom_game_state import DoomGameState
 
 
 class DoomGameStateFilterer(GamePalsDatasetTransformer):

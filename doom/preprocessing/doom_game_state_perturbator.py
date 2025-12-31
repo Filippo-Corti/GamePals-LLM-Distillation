@@ -3,7 +3,7 @@ import random
 import numpy as np
 
 from core.knowledge.dataset_perturbator import DatasetPerturbator
-from doom.doom_game_state import DoomGameState, AimedAtType, MonsterModel
+from doom.utils.doom_game_state import DoomGameState, AimedAtType
 
 
 class DoomGameStatePerturbator(DatasetPerturbator):
@@ -60,7 +60,7 @@ class DoomGameStatePerturbator(DatasetPerturbator):
                         ammoCount=max(
                             int(round(DoomGameStatePerturbator.perturbate_number(s.ammoCount, p=0.7, delta=0.3))
                                 ), 0),
-                        canUse=s.canUse if not s.canUse else random.random() > DoomGameStatePerturbator.DROP_PROBABILITY
+                        canUse=s.canUse if not s.canUse or s.index == 1 else random.random() > DoomGameStatePerturbator.DROP_PROBABILITY
                     ),
                     deep=True
                 )

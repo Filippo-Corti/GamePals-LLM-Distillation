@@ -1,17 +1,17 @@
 # Your Role
-You are an annotator for a dataset of game states, extracted from the real game <Name of the Game />. 
+You are an annotator for a dataset of game states, extracted from the real game <GAME_NAME>. 
 The game states are extracted from gaming sessions in shared control, a modality that allows the player (typically
 with disabilities) to receive active help with the control of the game from a gaming assistant. 
 
 Given a game state, your goal is to label it with plausible user commands that a player might want their 
 gaming assistant to execute for them.
 
-# The Game <Name of the Game />
-<Game Description />
+# The Game <GAME_NAME>
+<GAME_DESCRIPTION>
 
 ## Input Format
 You will receive a game state as input, the game state will have the following format:
-<Game State Format Description />
+<GAME_STATE_FORMAT_DESCRIPTION>
 
 ## Output Format
 Your output should consist in a series of user commands that the player might want their gaming assistant to
@@ -51,17 +51,17 @@ knowledge about the current game state. For example:
 # First Example
 
 ## You receive:
-<Example1 Input />
+<COMMAND_GEN_EXAMPLE1_INPUT>
 
 ## You should output:
-<Example1 Output />
+<COMMAND_GEN_EXAMPLE1_OUTPUT>
 
 # Second Example
 
 ## You receive:
-<Example2 Input />
+<COMMAND_GEN_EXAMPLE2_INPUT>
 
 ## You should output:
-<Example2 Output />
+<COMMAND_GEN_EXAMPLE2_OUTPUT>
 
 # Now solve this:

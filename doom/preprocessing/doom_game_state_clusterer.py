@@ -1,7 +1,7 @@
 from typing import Counter
 import numpy as np
 
-from .doom_game_state import DoomGameState, MonsterType, WeaponName, AimedAtType
+from doom.utils.doom_game_state import DoomGameState, MonsterType, WeaponName, AimedAtType
 from core.knowledge.dataset_clusterer import DatasetClusterer
 
 

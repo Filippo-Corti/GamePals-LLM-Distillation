@@ -1,12 +1,11 @@
 import os
-import json
 
 from core.datasets import GamePalsDataset
-from doom.doom_game_state import DoomGameState
-from doom.doom_game_state_clusterer import DoomGameStateClusterer
-from doom.doom_game_state_filterer import DoomGameStateFilterer
-from doom.doom_game_state_perturbator import DoomGameStatePerturbator
-
+from doom.preprocessing.doom_game_state_clusterer import DoomGameStateClusterer
+from doom.preprocessing.doom_game_state_filterer import DoomGameStateFilterer
+from doom.preprocessing.doom_game_state_perturbator import DoomGameStatePerturbator
+from doom.utils.doom_game_state import DoomGameState
+#
 # gamestates = [
 #     DoomGameState.model_validate_json(line[15:])
 #     for filepath in os.scandir("data/gamelogs")
@@ -44,3 +43,4 @@ dataset = GamePalsDataset.load('data/gamestates/perturbated-gamestates.json', cl
 
 print(len(dataset))
 print(dataset[16])
+print(dataset[16].to_prompt_ready())
