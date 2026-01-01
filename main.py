@@ -54,7 +54,9 @@ teacher = DoomTeacher(
         prompt_data_filepath='prompts/doom-prompt-data.json',
         open_ai_model='gpt-5.1',
         user_commands_batch_input_filepath='data/batches/user-commands-input.jsonl',
-        user_commands_batch_output_filepath='data/batches/user-commands-output.json'
+        user_commands_batch_output_filepath='data/batches/user-commands-output.json',
+        max_tokens_per_batch=900000,
+        estimated_tokens_per_request=3000
     )
 )
 
