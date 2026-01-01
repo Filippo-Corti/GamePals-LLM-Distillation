@@ -54,3 +54,6 @@ teacher = DoomTeacher(
 
 generation_prompt = open('prompts/command-generation-template.md', 'r').read()
 teacher.generate_user_commands(generation_prompt)
+
+
+print(dataset[278].to_prompt_ready())
