@@ -52,12 +52,11 @@ teacher = DoomTeacher(
     game_states=dataset,
     options=DoomTeacherOptions(
         prompt_data_filepath='prompts/doom-prompt-data.json',
-        open_ai_model='gpt-5.1'
+        open_ai_model='gpt-5.1',
+        user_commands_batch_input_filepath='data/batches/user-commands-input.jsonl',
+        user_commands_batch_output_filepath='data/batches/user-commands-output.json'
     )
 )
 
 generation_prompt = open('prompts/command-generation-template.md', 'r').read()
 teacher.generate_user_commands(generation_prompt)
-
-
-print(dataset[278].to_prompt_ready())
