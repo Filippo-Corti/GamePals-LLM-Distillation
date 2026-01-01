@@ -32,9 +32,12 @@ class DoomTeacher(GamePalsTeacher):
 
 
     def generate_user_commands(self, prompt: str):
-        # TODO:
-        # - Insert tags into prompt template
-        # - Import OpenAI and run the prompt
+        """
+        Generates user commands for the dataset of game states,
+        using the OpenAI API to access a state-of-the-art black-box LLM.
+
+        :param prompt: the knowledge-elicitation prompt
+        """
         prompt_data = json.load(open(self.options.prompt_data_filepath, "r"))
 
         full_prompt = prompt

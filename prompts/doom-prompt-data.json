@@ -20,9 +20,11 @@
     "Distances are expressed in game units.",
     "Angles are expressed in degrees.",
     "",
+    "```",
     "AIMED_AT:\n  type: <entity_type>\n  distance: <float>\n  interactable: <yes/no>",
     "MONSTERS:\n  - (<monster_type>, <health>, <distance>, <relative_angle>, <relative_pitch>)",
-    "INVENTORY:\n  current_slot: <int>\n  weapons:\n    - (<slot>, <weapon_name>, <ammo_count>)"
+    "INVENTORY:\n  current_slot: <int>\n  weapons:\n    - (<slot>, <weapon_name>, <ammo_count>)",
+    "```"
   ],
   "COMMAND_GEN_EXAMPLE1_INPUT": [
     "GAME STATE:",
