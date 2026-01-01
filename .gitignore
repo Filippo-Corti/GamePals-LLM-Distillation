@@ -2,4 +2,6 @@
 .venv/
 .code/
 
+.env
+
 **/__pycache__/**

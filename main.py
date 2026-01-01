@@ -1,4 +1,5 @@
 import os
+import dotenv
 
 from core.datasets import GamePalsDataset
 from doom.kd.doom_teacher import DoomTeacher, DoomTeacherOptions
@@ -6,6 +7,9 @@ from doom.preprocessing.doom_game_state_clusterer import DoomGameStateClusterer
 from doom.preprocessing.doom_game_state_filterer import DoomGameStateFilterer
 from doom.preprocessing.doom_game_state_perturbator import DoomGameStatePerturbator
 from doom.utils.doom_game_state import DoomGameState
+
+dotenv.load_dotenv()
+
 #
 # gamestates = [
 #     DoomGameState.model_validate_json(line[15:])
