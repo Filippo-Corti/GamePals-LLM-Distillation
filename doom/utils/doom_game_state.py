@@ -88,7 +88,6 @@ class DoomGameState(BaseModel):
     INVENTORY: InventoryModel
     GROUND_CHECK: GroundCheckModel
 
-    # TODO: method to transform into prompt-ready format
     # TODO: Potentially abstract GameState class?
     def to_prompt_ready(self) -> str:
         """

@@ -1,0 +1,66 @@
+[
+  {
+    "command": "Go press that switch",
+    "game_state_idx": 0,
+    "explicitness": 0.85,
+    "atomicity": 0.35,
+    "contextuality": 0.85,
+    "intent": "Move to the interactable wall and activate the switch"
+  },
+  {
+    "command": "Keep moving forward into the wall",
+    "game_state_idx": 0,
+    "explicitness": 0.7,
+    "atomicity": 0.5,
+    "contextuality": 0.8,
+    "intent": "Advance straight toward the interactable wall ahead"
+  },
+  {
+    "command": "Get ready for any enemies nearby",
+    "game_state_idx": 0,
+    "explicitness": 0.3,
+    "atomicity": 0.6,
+    "contextuality": 0.4,
+    "intent": "Prepare for possible upcoming combat while exploring"
+  },
+  {
+    "command": "Go press that switch",
+    "game_state_idx": 1,
+    "explicitness": 0.85,
+    "atomicity": 0.4,
+    "contextuality": 0.85,
+    "intent": "Approach the interactable wall and activate the switch"
+  },
+  {
+    "command": "Keep moving forward to that wall",
+    "game_state_idx": 1,
+    "explicitness": 0.7,
+    "atomicity": 0.3,
+    "contextuality": 0.75,
+    "intent": "Advance straight ahead toward the interactable wall"
+  },
+  {
+    "command": "Go press that switch",
+    "game_state_idx": 2,
+    "explicitness": 0.85,
+    "atomicity": 0.35,
+    "contextuality": 0.9,
+    "intent": "Approach the interactable wall and activate the switch"
+  },
+  {
+    "command": "Keep moving forward into the wall",
+    "game_state_idx": 2,
+    "explicitness": 0.7,
+    "atomicity": 0.6,
+    "contextuality": 0.8,
+    "intent": "Advance straight ahead toward the interactable surface"
+  },
+  {
+    "command": "Press that switch",
+    "game_state_idx": 3,
+    "explicitness": 0.9,
+    "atomicity": 0.8,
+    "contextuality": 0.8,
+    "intent": "Activate the nearby interactable wall in front"
+  }
+]
