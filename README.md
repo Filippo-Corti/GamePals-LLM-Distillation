@@ -3,7 +3,7 @@
 Pipeline:
 
 1. [X] Data Collection
-2. [ ] Data Augmentation
+2. [X] Data Augmentation
 3. [ ] Dataset Filtering
 4. [ ] Teacher Action Generation
 5. [ ] Student Training Setup
@@ -24,31 +24,46 @@ Game-Specific Tasks:
 
 ---
 
+Short-term TODOs:
+- Finish up the command-execution template for level 2
+- Finish up the tool calls for level 2
+- Test the OpenAI API Client with the labeling task
+- If everything is ok, start working on the API Client for the Student
 
-Teacher:
-- Knowledge Elicitation: 
-  - Data Curation (create Inputs)
-  - Labeling (create Outputs)
-
-Student:
-- Supervised Fine-Tuning
-- Distillation:
+---
 
 
-labelled_dataset = teacher.elicit_knowledge(
-    game states dataset,
-    transformations (
-        filter with clustering,
-        create perturbations,
-        data curation (add user commands),
-        labeling (add game actions)
-    )
-)
+Some old notes:
 
-The Teacher should:
-> Receive the dataset of game states (already transformed to its final form I would say)
-> Have a method that performs Data Curation (creates the user commands for the game states)
-> Have a method that performs Labeling (creates outputs given game states + user commands)
+
+Notes on LLM-Distillation code:
+
+OpenAIClient può essere utilizzato:
+- Come Batch, per fare UserCommands
+- Come Sequential, per fare Labeling del Teacher
+Non può essere usato come Student -> Serve un altro Client, tipo HuggingFaceClient che gestisca le chiamate sequenziali dello student
+esattamente allo stesso modo:
+ - Questo motiva un Client generico, da valutare in seguito
+
+Faccio tutto nel notebook, per il momento (al di fuori dei client)
+
+Nella pratica:
+- Passo il dataset al client e il system prompt già parsato per Doom, per poter generare gli user commands
+- Salvo gli user commands semplicemente in un array
+
+Dopodiché:
+- Costruisco un nuovo dataset che unisce:
+ - User Command e il suo Game State
+- Scrivo di nuovo il prompt
+- Costurisco un nuovo client a cui passo il nuovo dataset. Risultato sono le label (formattate in una certa maniera, come lista di Action)
+ - Usando le Tool Call!!!
+- Ottengo un array di labels, ognuna associata sia a id dello user command che al game state 
+
+---
+
+Poi mi devo occupare dello student…
+ Devo capire come si fa il fine tuning 
+  E' idealmente una funzionalità del client HuggingFaceClient
 
 
 
