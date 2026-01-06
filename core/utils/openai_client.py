@@ -4,31 +4,20 @@ import math
 from pathlib import Path
 from typing import TypeVar, Generic, Callable, Optional
 from enum import Enum
-
 from openai import OpenAI
 
 
 class ProcessingMode(Enum):
-    """Processing mode for dataset."""
+    """Processing mode for dataset"""
     SEQUENTIAL = "Sequential"  # One-by-one API calls
     BATCH = "Batch"  # Batch API processing
-
-
-class BatchStatus(Enum):
-    """Status of a batch operation."""
-    PENDING = "validating"
-    IN_PROGRESS = "in_progress"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-    EXPIRED = "expired"
 
 
 I = TypeVar('I')
 O = TypeVar('O')
 
 
-class OpenAIBatchClient(Generic[I, O]):
+class OpenAIClient(Generic[I, O]):
     """
     A client for processing datasets with OpenAI API.
 
@@ -151,10 +140,11 @@ class OpenAIBatchClient(Generic[I, O]):
                 latency = time.time() - start_time
 
                 raw_result = '\n'.join([
-                    out.content.text
+                    resp.text
                     for out in response.output
+                    for resp in out.content
                     if out.type == 'message' and out.role == 'assistant'
-                    if out.content.type == 'output_text'
+                    if resp.type == 'output_text'
                 ])
                 result = parse_output(raw_result, item_id, latency)
             except Exception as e:
@@ -165,7 +155,7 @@ class OpenAIBatchClient(Generic[I, O]):
             if request_delay > 0:
                 time.sleep(request_delay)
 
-        successful = sum(1 for r in results if r.success)
+        successful = sum(1 for r in results if r is not None)
         print(f"\nCompleted: {successful}/{total} successful")
 
         return results
@@ -207,9 +197,9 @@ class OpenAIBatchClient(Generic[I, O]):
             batch_id = self._submit_batch(batch_file)
             status = self._wait_for_batch(batch_id)
 
-            if status != BatchStatus.COMPLETED:
+            if status != "completed":
                 raise RuntimeError(
-                    f"Batch {batch_id} ended with status: {status.value}"
+                    f"Batch {batch_id} ended with status: {status}"
                 )
 
             latency = time.time() - start_time
@@ -278,24 +268,19 @@ class OpenAIBatchClient(Generic[I, O]):
 
         return batch.id
 
-    def _wait_for_batch(self, batch_id: str) -> BatchStatus:
+    def _wait_for_batch(self, batch_id: str) -> str:
         """Waits for batch to complete, polling at regular intervals."""
         while True:
             batch = self.client.batches.retrieve(batch_id)
-            status = BatchStatus(batch.status)
+            status = batch.status
 
             total = batch.request_counts.total
             completed = batch.request_counts.completed
             failed = batch.request_counts.failed
 
-            print(f"Status: {status.value} | Progress: {completed}/{total} | Failed: {failed}")
+            print(f"Status: {status} | Progress: {completed}/{total} | Failed: {failed}")
 
-            if status in (
-                    BatchStatus.COMPLETED,
-                    BatchStatus.FAILED,
-                    BatchStatus.CANCELLED,
-                    BatchStatus.EXPIRED,
-            ):
+            if status in ("completed", "failed", "cancelling", "cancelled", "expired"):
                 return status
 
             time.sleep(60)
@@ -320,16 +305,17 @@ class OpenAIBatchClient(Generic[I, O]):
 
             try:
                 raw_result = '\n'.join([
-                    out.content.text
-                    for out in response.output
-                    if out.type == 'message' and out.role == 'assistant'
-                    if out.content.type == 'output_text'
+                    resp["text"]
+                    for out in response["output"]
+                    for resp in out["content"]
+                    if out["type"] == 'message' and out["role"] == 'assistant'
+                    if resp["type"] == 'output_text'
                 ])
                 result = parse_output(raw_result, custom_id, latency)
                 results[custom_id] = result
 
             except Exception as e:
-                print(record)
+                print(e)
                 results[custom_id] = None
 
         return results
