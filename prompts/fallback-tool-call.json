@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "name": "fallback",
+  "description": "Explain why the model cannot produce executable actions.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "reason": {
+        "type": "string",
+        "description": "Explanation of why execute cannot be called."
+      }
+    },
+    "required": ["reason"],
+    "additionalProperties": false
+  }
+}

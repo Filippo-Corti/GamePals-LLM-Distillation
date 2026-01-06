@@ -1,0 +1,37 @@
+{
+  "type": "function",
+  "name": "execute",
+  "description": "Execute a sequence of game actions",
+  "strict": true,
+  "parameters": {
+	"type": "object",
+	"properties": {
+	  "actions": {
+		"type": "array",
+		"description": "The ordered list of actions to execute",
+		"items": {
+		  "type": "object",
+		  "properties": {
+			"action": {
+			  "type": "string",
+			  "description": "The action to perform",
+			  "enum": [
+				"jump",
+				"shoot",
+				"run"
+			  ]
+			},
+			"value": {
+			  "type": "number",
+			  "description": "The intensity of the action. It should be 0 or 1 for discrete actions and between -1 and 1 for continuous actions"
+			}
+		  },
+		  "required": ["action", "value"],
+		  "additionalProperties": false
+		}
+	  }
+	},
+	"required": ["actions"],
+	"additionalProperties": false
+  }
+}

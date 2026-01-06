@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import TypeVar, Generic, Callable, Optional
 from enum import Enum
 from openai import OpenAI
+from openai.types.responses import Response
 
 
 class ProcessingMode(Enum):
@@ -31,6 +32,7 @@ class OpenAIClient(Generic[I, O]):
             max_output_tokens: int = 1024,
             temperature: float = 1.0,
             reasoning_effort: str = 'none',
+            tool_choice: str = 'auto',
             working_dir: Path = Path("./data/openai-client"),
             api_key: Optional[str] = None
     ):
@@ -42,6 +44,7 @@ class OpenAIClient(Generic[I, O]):
         :param max_output_tokens: Maximum tokens in model response (default: 1024)
         :param temperature: Sampling temperature (0-2) (default: 1.0)
         :param reasoning_effort: Reasoning effort for the model (default: none)
+        :param tool_choice: Tool choice strategy - "auto", "none", "required", ... (default: "auto")
         :param working_dir: Directory for temporary files
         :param api_key: OpenAI API key (uses environment variable if not provided)
         """
@@ -51,6 +54,7 @@ class OpenAIClient(Generic[I, O]):
         self.max_output_tokens = max_output_tokens
         self.reasoning_effort = reasoning_effort
         self.temperature = temperature
+        self.tool_choice = tool_choice
         self.working_dir = working_dir
         self.working_dir.mkdir(parents=True, exist_ok=True)
 
@@ -58,8 +62,9 @@ class OpenAIClient(Generic[I, O]):
             self,
             dataset: list[I],
             system_prompt: str,
+            tools: list[dict],
             format_input: Callable[[I], str],
-            parse_output: Callable[[str, str, float], O],
+            parse_output: Callable[[Response, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
             batch_size: int = 1,
             request_delay: float = 0.0,
@@ -69,8 +74,9 @@ class OpenAIClient(Generic[I, O]):
 
         :param dataset: List of items to process
         :param system_prompt: System prompt for all requests
+        :param tools: List of tool call signatures
         :param format_input: Function to convert each item to its prompt-ready representation
-        :param parse_output: Function to convert each prompt output to the output type. Also receives the input id and the latency (s) of the function.
+        :param parse_output: Function to convert each OpenAI Response to the output type. Also receives the input id and the latency (s) of the function.
         :param get_id: Function that generates IDs for each item (default: "item-{index}")
         :param batch_size: Batch size (default: 1)
         :param request_delay: Request delay (default: 0)
@@ -81,12 +87,15 @@ class OpenAIClient(Generic[I, O]):
 
         print(f"Processing mode: {self.mode.value}")
         print(f"Model: {self.model}")
+        if tools:
+            print(f"Tool calling enabled with {len(tools)} tool(s)")
 
         match self.mode:
             case ProcessingMode.SEQUENTIAL:
                 return self._process_sequential(
                     dataset=dataset,
                     system_prompt=system_prompt,
+                    tools=tools,
                     format_input=format_input,
                     parse_output=parse_output,
                     get_id=get_id,
@@ -96,6 +105,7 @@ class OpenAIClient(Generic[I, O]):
                 return self._process_batch(
                     dataset=dataset,
                     system_prompt=system_prompt,
+                    tools=tools,
                     format_input=format_input,
                     parse_output=parse_output,
                     get_id=get_id,
@@ -106,8 +116,9 @@ class OpenAIClient(Generic[I, O]):
             self,
             dataset: list[I],
             system_prompt: str,
+            tools: list[dict],
             format_input: Callable[[I], str],
-            parse_output: Callable[[str, str, float], O],
+            parse_output: Callable[[Response, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
             request_delay: float = 0.0,
     ) -> list:
@@ -121,32 +132,31 @@ class OpenAIClient(Generic[I, O]):
 
             print(f"[{idx + 1}/{total}] Processing item with id={item_id}...")
 
+            request = {
+                "model": self.model,
+                "inputs": [{
+                    "role": "developer",
+                    "content": [{"type": "input_text", "text": system_prompt}]
+                }, {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": format_input(item)}]
+                }],
+                "text": {"format": {"type": "text"}, "verbosity": "medium"},
+                "reasoning": {"effort": self.reasoning_effort},
+                "max_output_tokens": self.max_output_tokens,
+                "temperature": self.temperature,
+            }
+
+            if tools:
+                request["tool_choice"] = self.tool_choice
+                request["tools"] = tools
+
             try:
                 start_time = time.time()
-                response = self.client.responses.create(
-                    model=self.model,
-                    input=[{  # type: ignore
-                        "role": "developer",
-                        "content": [{"type": "input_text", "text": system_prompt}]
-                    }, {
-                        "role": "user",
-                        "content": [{"type": "input_text", "text": format_input(item)}]
-                    }],
-                    text={"format": {"type": "text"}, "verbosity": "medium"},  # type: ignore
-                    reasoning={"effort": self.reasoning_effort},  # type: ignore
-                    max_output_tokens=self.max_output_tokens,
-                    temperature=self.temperature,
-                )
+                response = self.client.responses.create(**request)
                 latency = time.time() - start_time
 
-                raw_result = '\n'.join([
-                    resp.text
-                    for out in response.output
-                    for resp in out.content
-                    if out.type == 'message' and out.role == 'assistant'
-                    if resp.type == 'output_text'
-                ])
-                result = parse_output(raw_result, item_id, latency)
+                result = parse_output(response, item_id, latency)
             except Exception as e:
                 print(e)
                 result = None
@@ -164,8 +174,9 @@ class OpenAIClient(Generic[I, O]):
             self,
             dataset: list[I],
             system_prompt: str,
+            tools: list[dict],
             format_input: Callable[[I], str],
-            parse_output: Callable[[str, str, float], O],
+            parse_output: Callable[[Response, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
             batch_size: int = 1
     ) -> list:
@@ -288,7 +299,7 @@ class OpenAIClient(Generic[I, O]):
     def _load_batch_results(
             self,
             batch_id: str,
-            parse_output: Callable[[str, str, float], O],
+            parse_output: Callable[[Response, str, float], O],
             latency: float
     ) -> dict[str, str]:
         """Parses results from a completed batch."""
@@ -301,19 +312,12 @@ class OpenAIClient(Generic[I, O]):
         for line in content.iter_lines():
             record = json.loads(line)
             custom_id = record["custom_id"]
-            response = record["response"]["body"]
+            response_dict = record["response"]["body"]
 
             try:
-                raw_result = '\n'.join([
-                    resp["text"]
-                    for out in response["output"]
-                    for resp in out["content"]
-                    if out["type"] == 'message' and out["role"] == 'assistant'
-                    if resp["type"] == 'output_text'
-                ])
-                result = parse_output(raw_result, custom_id, latency)
+                response = Response.model_validate(response_dict)
+                result = parse_output(response, custom_id, latency)
                 results[custom_id] = result
-
             except Exception as e:
                 print(e)
                 results[custom_id] = None
