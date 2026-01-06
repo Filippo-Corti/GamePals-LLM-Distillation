@@ -2,8 +2,7 @@ import json
 import time
 import math
 from pathlib import Path
-from typing import TypeVar, Generic, Callable, Optional, Any
-from dataclasses import dataclass
+from typing import TypeVar, Generic, Callable, Optional
 from enum import Enum
 
 from openai import OpenAI
@@ -11,8 +10,8 @@ from openai import OpenAI
 
 class ProcessingMode(Enum):
     """Processing mode for dataset."""
-    SEQUENTIAL = "sequential"  # One-by-one API calls
-    BATCH = "batch"  # Batch API processing
+    SEQUENTIAL = "Sequential"  # One-by-one API calls
+    BATCH = "Batch"  # Batch API processing
 
 
 class BatchStatus(Enum):
@@ -25,7 +24,11 @@ class BatchStatus(Enum):
     EXPIRED = "expired"
 
 
-class OpenAIClient:
+I = TypeVar('I')
+O = TypeVar('O')
+
+
+class OpenAIBatchClient(Generic[I, O]):
     """
     A client for processing datasets with OpenAI API.
 
@@ -38,6 +41,7 @@ class OpenAIClient:
             mode: ProcessingMode,
             max_output_tokens: int = 1024,
             temperature: float = 1.0,
+            reasoning_effort: str = 'none',
             working_dir: Path = Path("./data/openai-client"),
             api_key: Optional[str] = None
     ):
@@ -46,8 +50,9 @@ class OpenAIClient:
 
         :param model: OpenAI model to use (e.g., "gpt-4", "gpt-3.5-turbo")
         :param mode: Processing mode (sequential or batch)
-        :param max_output_tokens: Maximum tokens in model response
-        :param temperature: Sampling temperature (0-2)
+        :param max_output_tokens: Maximum tokens in model response (default: 1024)
+        :param temperature: Sampling temperature (0-2) (default: 1.0)
+        :param reasoning_effort: Reasoning effort for the model (default: none)
         :param working_dir: Directory for temporary files
         :param api_key: OpenAI API key (uses environment variable if not provided)
         """
@@ -55,17 +60,33 @@ class OpenAIClient:
         self.model = model
         self.mode = mode
         self.max_output_tokens = max_output_tokens
+        self.reasoning_effort = reasoning_effort
         self.temperature = temperature
         self.working_dir = working_dir
         self.working_dir.mkdir(parents=True, exist_ok=True)
 
     def process(
             self,
-            dataset: list[str],
+            dataset: list[I],
             system_prompt: str,
+            format_input: Callable[[I], str],
+            parse_output: Callable[[str, str, float], O],
+            get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
             batch_size: int = 1,
-            request_delay: float = 0.0
-    ) -> list:
+            request_delay: float = 0.0,
+    ) -> list[O]:
+        """
+        Processes a dataset through the OpenAI API.
+
+        :param dataset: List of items to process
+        :param system_prompt: System prompt for all requests
+        :param format_input: Function to convert each item to its prompt-ready representation
+        :param parse_output: Function to convert each prompt output to the output type. Also receives the input id and the latency (s) of the function.
+        :param get_id: Function that generates IDs for each item (default: "item-{index}")
+        :param batch_size: Batch size (default: 1)
+        :param request_delay: Request delay (default: 0)
+        :return: List of BatchResult objects with parsed outputs
+        """
         if not dataset:
             return []
 
@@ -75,22 +96,31 @@ class OpenAIClient:
         match self.mode:
             case ProcessingMode.SEQUENTIAL:
                 return self._process_sequential(
-                    dataset,
-                    system_prompt,
-                    request_delay
+                    dataset=dataset,
+                    system_prompt=system_prompt,
+                    format_input=format_input,
+                    parse_output=parse_output,
+                    get_id=get_id,
+                    request_delay=request_delay,
                 )
             case ProcessingMode.BATCH:
                 return self._process_batch(
-                    dataset,
-                    system_prompt,
-                    batch_size
+                    dataset=dataset,
+                    system_prompt=system_prompt,
+                    format_input=format_input,
+                    parse_output=parse_output,
+                    get_id=get_id,
+                    batch_size=batch_size,
                 )
 
     def _process_sequential(
             self,
-            dataset: list[str],
+            dataset: list[I],
             system_prompt: str,
-            request_delay: float = 0.0
+            format_input: Callable[[I], str],
+            parse_output: Callable[[str, str, float], O],
+            get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
+            request_delay: float = 0.0,
     ) -> list:
         results = []
         total = len(dataset)
@@ -98,40 +128,40 @@ class OpenAIClient:
         print(f"Processing {total} items sequentially")
 
         for idx, item in enumerate(dataset):
-            item_id = f'item-{idx}'
+            item_id = get_id(item, idx)
 
-            print(f"[{idx + 1}/{total}] Processing {item_id}...", end=" ")
+            print(f"[{idx + 1}/{total}] Processing item with id={item_id}...")
 
             try:
-                # Make API call
+                start_time = time.time()
                 response = self.client.responses.create(
                     model=self.model,
-                    input=[
-                        {
-                            "role": "developer",
-                            "content": system_prompt
-                        },
-                        {
-                            "role": "user",
-                            "content": '' # TODO
-                        }
-                    ],
-                    reasoning={"effort": "low"},
+                    input=[{  # type: ignore
+                        "role": "developer",
+                        "content": [{"type": "input_text", "text": system_prompt}]
+                    }, {
+                        "role": "user",
+                        "content": [{"type": "input_text", "text": format_input(item)}]
+                    }],
+                    text={"format": {"type": "text"}, "verbosity": "medium"},  # type: ignore
+                    reasoning={"effort": self.reasoning_effort},  # type: ignore
                     max_output_tokens=self.max_output_tokens,
                     temperature=self.temperature,
                 )
+                latency = time.time() - start_time
 
-                result = '\n'.join([
+                raw_result = '\n'.join([
                     out.content.text
                     for out in response.output
-                    if out.type == 'message' and out.content.type == 'output_text'
+                    if out.type == 'message' and out.role == 'assistant'
+                    if out.content.type == 'output_text'
                 ])
+                result = parse_output(raw_result, item_id, latency)
             except Exception as e:
                 print(e)
                 result = None
 
             results.append(result)
-
             if request_delay > 0:
                 time.sleep(request_delay)
 
@@ -142,18 +172,22 @@ class OpenAIClient:
 
     def _process_batch(
             self,
-            dataset: list[str],
+            dataset: list[I],
             system_prompt: str,
+            format_input: Callable[[I], str],
+            parse_output: Callable[[str, str, float], O],
+            get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
             batch_size: int = 1
     ) -> list:
-        num_batches = math.ceil(len(dataset) / batch_size)
+        results = dict()
+        total = len(dataset)
+        num_batches = math.ceil(total / batch_size)
 
-        print(f"Processing {len(dataset)} items in {num_batches} batch(es)")
+        print(f"Processing {total} items in {num_batches} batch(es)")
 
         for batch_num in range(num_batches):
             start_idx = batch_num * batch_size
-            end_idx = min((batch_num + 1) * batch_size, len(dataset))
-
+            end_idx = min((batch_num + 1) * batch_size, total)
             batch_subset = dataset[start_idx:end_idx]
 
             print(f"\n{'=' * 60}")
@@ -161,20 +195,16 @@ class OpenAIClient:
             print(f"Items {start_idx} to {end_idx - 1} ({len(batch_subset)} total)")
             print(f"{'=' * 60}")
 
-            # Build and submit batch
             batch_file = self._build_batch_file(
                 batch_num=batch_num,
                 dataset_subset=batch_subset,
                 start_idx=start_idx,
                 system_prompt=system_prompt,
+                format_input=format_input,
+                get_id=get_id,
             )
-
-            print("Submitting batch...")
+            start_time = time.time()
             batch_id = self._submit_batch(batch_file)
-            print(f"Batch ID: {batch_id}")
-
-            # Wait for completion
-            print("Waiting for batch to complete...")
             status = self._wait_for_batch(batch_id)
 
             if status != BatchStatus.COMPLETED:
@@ -182,19 +212,21 @@ class OpenAIClient:
                     f"Batch {batch_id} ended with status: {status.value}"
                 )
 
-            # Load and parse results
-            print("Loading results...")
+            latency = time.time() - start_time
             batch_results = self._load_batch_results(
                 batch_id=batch_id,
-                dataset_subset=batch_subset,
-                start_idx=start_idx,
+                parse_output=parse_output,
+                latency=latency
             )
-            all_results.update(batch_results)
+            results.update(batch_results)
 
             print(f"Batch {batch_num + 1}/{num_batches} completed successfully!")
 
-            # Return results in original order
-        return self._order_results(all_results, len(dataset))
+        # Return results in original order
+        return [
+            results.get(get_id(item, idx))
+            for idx, item in enumerate(dataset)
+        ]
 
     def _build_batch_file(
             self,
@@ -202,14 +234,16 @@ class OpenAIClient:
             dataset_subset: list[str],
             start_idx: int,
             system_prompt: str,
+            format_input: Callable[[I], str],
+            get_id: Callable[[I, int], str],
     ) -> Path:
-        """Build JSONL batch file for a subset of the dataset."""
+        """Builds JSONL batch file for a subset of the dataset."""
         batch_file = self.working_dir / f"batch-{batch_num:04d}.jsonl"
 
         with open(batch_file, "w", encoding="utf-8") as f:
             for local_idx, item in enumerate(dataset_subset):
                 global_idx = start_idx + local_idx
-                custom_id = f'item-{global_idx}'
+                custom_id = get_id(item, global_idx)
 
                 request = {
                     "custom_id": custom_id,
@@ -218,16 +252,11 @@ class OpenAIClient:
                     "body": {
                         "model": self.model,
                         "max_output_tokens": self.max_output_tokens,
-                        "temperature": self.temperature,  # TODO: verify if ignored or used
+                        "temperature": self.temperature,
+                        "reasoning": {"effort": self.reasoning_effort},
                         "input": [
-                            {
-                                "role": "system",
-                                "content": system_prompt
-                            },
-                            {
-                                "role": "user",
-                                "content": '' # TODO (game state to prompt ready)
-                            }
+                            {"role": "developer", "content": system_prompt},
+                            {"role": "user", "content": format_input(item)}
                         ]
                     }
                 }
@@ -237,7 +266,7 @@ class OpenAIClient:
         return batch_file
 
     def _submit_batch(self, batch_file: Path) -> str:
-        """Upload batch file and create batch job."""
+        """Uploads batch file and creates batch job."""
         with open(batch_file, "rb") as f:
             uploaded_file = self.client.files.create(file=f, purpose="batch")
 
@@ -250,7 +279,7 @@ class OpenAIClient:
         return batch.id
 
     def _wait_for_batch(self, batch_id: str) -> BatchStatus:
-        """Wait for batch to complete, polling at regular intervals."""
+        """Waits for batch to complete, polling at regular intervals."""
         while True:
             batch = self.client.batches.retrieve(batch_id)
             status = BatchStatus(batch.status)
@@ -259,11 +288,7 @@ class OpenAIClient:
             completed = batch.request_counts.completed
             failed = batch.request_counts.failed
 
-            print(
-                f"Status: {status.value} | "
-                f"Progress: {completed}/{total} | "
-                f"Failed: {failed}"
-            )
+            print(f"Status: {status.value} | Progress: {completed}/{total} | Failed: {failed}")
 
             if status in (
                     BatchStatus.COMPLETED,
@@ -278,14 +303,11 @@ class OpenAIClient:
     def _load_batch_results(
             self,
             batch_id: str,
-            dataset_subset: list[str],
-            start_idx: int,
+            parse_output: Callable[[str, str, float], O],
+            latency: float
     ) -> dict[str, str]:
-        """Load and parse results from a completed batch."""
+        """Parses results from a completed batch."""
         batch = self.client.batches.retrieve(batch_id)
-
-        if batch.status != "completed":
-            raise RuntimeError(f"Batch {batch_id} not completed: {batch.status}")
 
         output_file_id = batch.output_file_id
         content = self.client.files.content(output_file_id)
@@ -294,33 +316,20 @@ class OpenAIClient:
         for line in content.iter_lines():
             record = json.loads(line)
             custom_id = record["custom_id"]
+            response = record["response"]["body"]
 
-            # Extract item index from custom_id
             try:
-                output_text = ""
-                for item in record["response"]["body"]["output"]:
-                    for content_item in item["content"]:
-                        if content_item["type"] == "output_text":
-                            output_text += content_item["text"]
-
-                results[custom_id] = output_text
+                raw_result = '\n'.join([
+                    out.content.text
+                    for out in response.output
+                    if out.type == 'message' and out.role == 'assistant'
+                    if out.content.type == 'output_text'
+                ])
+                result = parse_output(raw_result, custom_id, latency)
+                results[custom_id] = result
 
             except Exception as e:
+                print(record)
                 results[custom_id] = None
 
         return results
-
-    def _order_results(
-        self,
-        results: dict[str, str],
-        total_items: int,
-    ) -> list[str]:
-        """Order results to match original dataset order."""
-        ordered = []
-        for i in range(total_items):
-            item_id = f"item-{i}"
-            if item_id in results:
-                ordered.append(results[item_id])
-            else:
-                ordered.append(None)
-        return ordered
