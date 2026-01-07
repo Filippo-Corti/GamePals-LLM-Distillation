@@ -46,16 +46,10 @@ The parameters should be set following these strict conditions:
 
 # Example 1
 
-<COMMAND_GEN_EXAMPLE1_INPUT>
-
-## Output:
-<COMMAND_GEN_EXAMPLE1_OUTPUT>
+<EXAMPLES_COMMAND_GEN_1>
 
 # Example 2
 
-<COMMAND_GEN_EXAMPLE2_INPUT>
-
-## Output:
-<COMMAND_GEN_EXAMPLE2_OUTPUT>
+<EXAMPLES_COMMAND_GEN_2>
 
 # Now solve this:

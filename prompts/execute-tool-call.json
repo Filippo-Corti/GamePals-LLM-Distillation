@@ -8,7 +8,7 @@
 	"properties": {
 	  "actions": {
 		"type": "array",
-		"description": "The ordered list of actions to execute",
+		"description": "The ordered list of actions to execute on a virtual game controller",
 		"items": {
 		  "type": "object",
 		  "properties": {
@@ -16,17 +16,23 @@
 			  "type": "string",
 			  "description": "The action to perform",
 			  "enum": [
-				"jump",
-				"shoot",
-				"run"
+				"<placeholder>"
 			  ]
 			},
 			"value": {
 			  "type": "number",
 			  "description": "The intensity of the action. It should be 0 or 1 for discrete actions and between -1 and 1 for continuous actions"
+			},
+			"duration": {
+			  "type": "number",
+			  "description": "The duration of the action in seconds. That is, the time the button/stick is pressed/held in position"
+			},
+			"blocking": {
+			  "type": "boolean",
+			  "description": "Whether the action should be blocking or non-blocking. If blocking, the next action in the list will start only after `duration` seconds."
 			}
 		  },
-		  "required": ["action", "value"],
+		  "required": ["action", "value", "duration", "blocking"],
 		  "additionalProperties": false
 		}
 	  }
