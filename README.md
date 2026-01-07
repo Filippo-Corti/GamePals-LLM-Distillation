@@ -25,9 +25,9 @@ Game-Specific Tasks:
 ---
 
 Short-term TODOs:
-- Test the OpenAI API Client with the labeling task
+- Test the OpenAI API Client with the labeling task (REMEMBER TO REPLACE THE PLACEHOLDER FOR ENUM IN THE TOOL CALL!!!!)
 - If everything is ok, start working on the API Client for the Student
-- Improve a little bit the command-generation-template structure
+- 
 
 ---
 
