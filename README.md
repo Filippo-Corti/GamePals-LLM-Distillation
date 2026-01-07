@@ -25,8 +25,6 @@ Game-Specific Tasks:
 ---
 
 Short-term TODOs:
-- Finish up the command-execution template for level 2
-- Finish up the tool calls for level 2
 - Test the OpenAI API Client with the labeling task
 - If everything is ok, start working on the API Client for the Student
 - Improve a little bit the command-generation-template structure
