@@ -65,7 +65,7 @@ class OpenAIClient(Generic[I, O]):
             tools: list[dict],
             format_input: Callable[[I], str],
             parse_output: Callable[[Response, str, float], O],
-            get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
+            get_id: Callable[[I, int], str] = lambda x, idx: x.get('id', f'item-{idx}'),
             batch_size: int = 1,
             request_delay: float = 0.0,
     ) -> list[O]:
@@ -199,6 +199,7 @@ class OpenAIClient(Generic[I, O]):
             batch_file = self._build_batch_file(
                 batch_num=batch_num,
                 dataset_subset=batch_subset,
+                tools=tools,
                 start_idx=start_idx,
                 system_prompt=system_prompt,
                 format_input=format_input,
@@ -233,6 +234,7 @@ class OpenAIClient(Generic[I, O]):
             self,
             batch_num: int,
             dataset_subset: list[str],
+            tools: list[dict],
             start_idx: int,
             system_prompt: str,
             format_input: Callable[[I], str],
@@ -255,6 +257,7 @@ class OpenAIClient(Generic[I, O]):
                         "max_output_tokens": self.max_output_tokens,
                         "temperature": self.temperature,
                         "reasoning": {"effort": self.reasoning_effort},
+                        "tools": tools,
                         "input": [
                             {"role": "developer", "content": system_prompt},
                             {"role": "user", "content": format_input(item)}
@@ -321,5 +324,49 @@ class OpenAIClient(Generic[I, O]):
             except Exception as e:
                 print(e)
                 results[custom_id] = None
+
+        return results
+
+    def recover_batch_results(
+            self,
+            batch_id: str,
+            parse_output: Callable[[Response, str, float], O],
+            latency: float = 0.0
+    ) -> dict[str, O]:
+        """
+        Recovers results from a previously completed batch.
+
+        :param batch_id: The ID of the batch to recover
+        :param parse_output: Function to convert each OpenAI Response to the output type
+        :param latency: Latency value to pass to parse_output (default: 0.0)
+        :return: Dictionary mapping custom_id to parsed results
+        :raises RuntimeError: If batch is not completed or has no output file
+        """
+        print(f"Recovering batch results for batch_id: {batch_id}")
+
+        batch = self.client.batches.retrieve(batch_id)
+        status = batch.status
+
+        print(f"Batch status: {status}")
+
+        if status != "completed":
+            raise RuntimeError(
+                f"Cannot recover batch {batch_id}: status is '{status}', not 'completed'"
+            )
+
+        if not batch.output_file_id:
+            raise RuntimeError(
+                f"Batch {batch_id} has no output file available"
+            )
+
+        total = batch.request_counts.total
+        completed = batch.request_counts.completed
+        failed = batch.request_counts.failed
+
+        print(f"Batch info: {completed}/{total} completed | {failed} failed")
+
+        results = self._load_batch_results(batch_id, parse_output, latency)
+
+        print(f"Successfully recovered {len(results)} results")
 
         return results

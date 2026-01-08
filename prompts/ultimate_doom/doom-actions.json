@@ -1,0 +1,12 @@
+[
+  "movement_x",
+  "movement_y",
+  "direction_x",
+  "direction_y",
+  "run",
+  "fire",
+  "jump",
+  "interact",
+  "prev_weapon",
+  "next_weapon"
+]

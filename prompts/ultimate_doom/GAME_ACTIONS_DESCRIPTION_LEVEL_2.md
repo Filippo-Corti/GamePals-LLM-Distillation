@@ -90,6 +90,7 @@ jump represents the action of jumping.
 
 ### Interact/Use ('interact'):
 interact represents the action of interacting with an interactable element of the environment (e.g., a door or a button). 
+Interaction can only happen if the element being aimed at is interactable AND if the distance from that object is less than 20 units.
 #### How to Use:
 - set `action='interact'`
 - set `value=1.0` to express the intent to interact
