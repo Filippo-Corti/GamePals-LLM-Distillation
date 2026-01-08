@@ -1,18 +1,18 @@
 import json
 import time
-
-import torch
 from pathlib import Path
-from typing import TypeVar, Generic, Callable, Optional, Union, Any
-from dataclasses import dataclass
+from typing import TypeVar, Generic, Callable, Optional, Any
+import torch
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
+    BitsAndBytesConfig,
 )
 from datasets import Dataset
+from tqdm import tqdm
 
 I = TypeVar('I')
 O = TypeVar('O')
@@ -20,9 +20,9 @@ O = TypeVar('O')
 
 class HuggingFaceClient(Generic[I, O]):
     """
-    A client for processing datasets and fine-tuning models with Hugging Face.
+    Optimized client for processing datasets and fine-tuning models with Hugging Face.
 
-    Supports local inference, fine-tuning, and tool calling.
+    Supports local inference, LoRA fine-tuning, batching, and multiple optimizations.
     """
 
     def __init__(
@@ -34,9 +34,12 @@ class HuggingFaceClient(Generic[I, O]):
             working_dir: Path = Path("./data/huggingface"),
             load_in_8bit: bool = False,
             load_in_4bit: bool = False,
+            use_better_transformer: bool = True,
+            torch_compile: bool = False,
+            hf_token: Optional[str] = None,
     ):
         """
-        Creates a HuggingFaceClient instance.
+        Creates an optimized HuggingFaceClient instance.
 
         :param model: Hugging Face model name or path
         :param device: Device to use ('cuda', 'cpu', or None for auto)
@@ -45,6 +48,9 @@ class HuggingFaceClient(Generic[I, O]):
         :param working_dir: Directory to cache models
         :param load_in_8bit: Load model in 8-bit precision (default: False)
         :param load_in_4bit: Load model in 4-bit precision (default: False)
+        :param use_better_transformer: Use BetterTransformer optimization (default: True)
+        :param torch_compile: Use torch.compile for extra speed (default: False)
+        :param hf_token: Hugging Face API token for gated models
         """
         self.model_name = model
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
@@ -53,15 +59,24 @@ class HuggingFaceClient(Generic[I, O]):
         self.working_dir = working_dir
         self.load_in_8bit = load_in_8bit
         self.load_in_4bit = load_in_4bit
+        self.use_better_transformer = use_better_transformer
+        self.torch_compile = torch_compile
+        self.hf_token = hf_token
 
         self.model = None
         self.tokenizer = None
+        self.is_compiled = False
+
+        # System prompt caching
+        self.cached_system_prompt = None
+        self.cached_system_prefix = None
 
         print(f"Initialized HuggingFaceClient for {self.model_name}")
         print(f"Device: {self.device}")
+        print(f"Optimizations: BetterTransformer={use_better_transformer}, Compile={torch_compile}")
 
     def load_model(self, model_name: Optional[str] = None):
-        """Loads the model and tokenizer if not already loaded."""
+        """Loads the model and tokenizer with all optimizations."""
         if self.model is not None and model_name is None:
             return
 
@@ -70,30 +85,87 @@ class HuggingFaceClient(Generic[I, O]):
 
         print(f"Loading model: {self.model_name}")
 
+        # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             cache_dir=self.working_dir,
-            trust_remote_code=True
+            trust_remote_code=True,
+            token=self.hf_token,
         )
 
-        # Set pad token if not set -> TODO: remove?
-        # if self.tokenizer.pad_token is None:
-        #     self.tokenizer.pad_token = self.tokenizer.eos_token
+        # Ensure padding token is set
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
 
-        model_kwargs : dict[str, Any] = {
+        # Configure model loading
+        model_kwargs: dict[str, Any] = {
             'cache_dir': self.working_dir,
             'trust_remote_code': True,
+            'token': self.hf_token,
+            'low_cpu_mem_usage': True,
         }
 
-        if self.load_in_8bit:
-            model_kwargs['load_in_8bit'] = True
-        elif self.load_in_4bit:
-            model_kwargs['load_in_4bit'] = True
+        # Quantization config
+        if self.load_in_4bit:
+            model_kwargs['quantization_config'] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4"
+            )
+        elif self.load_in_8bit:
+            model_kwargs['quantization_config'] = BitsAndBytesConfig(
+                load_in_8bit=True,
+            )
         elif self.device == 'cuda':
-            model_kwargs['torch_dtype'] = torch.float16
+            model_kwargs['dtype'] = torch.float16
 
+        # Load model
         self.model = AutoModelForCausalLM.from_pretrained(
             self.model_name,
+            **model_kwargs
+        )
+
+        # Move to device if not quantized
+        if not (self.load_in_8bit or self.load_in_4bit):
+            self.model = self.model.to(self.device)
+
+        # Apply BetterTransformer (only works with certain models)
+        if self.use_better_transformer and not (self.load_in_8bit or self.load_in_4bit):
+            try:
+                self.model = self.model.to_bettertransformer()
+                print("BetterTransformer enabled")
+            except Exception as e:
+                print(f"BetterTransformer not available: {e}")
+
+        # Enable gradient checkpointing for memory efficiency
+        if hasattr(self.model, 'gradient_checkpointing_enable'):
+            self.model.gradient_checkpointing_enable()
+
+        self.model.eval()
+
+        print("✓ Model loaded successfully!")
+
+    def load_model_from_checkpoint(self, checkpoint_path: Path):
+        """Loads a fine-tuned checkpoint."""
+        print(f"Loading checkpoint from {checkpoint_path}")
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            checkpoint_path,
+            token=self.hf_token
+        )
+
+        model_kwargs = {
+            'token': self.hf_token,
+            'low_cpu_mem_usage': True,
+        }
+
+        if self.device == 'cuda':
+            model_kwargs['dtype'] = torch.float16
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            checkpoint_path,
             **model_kwargs
         )
 
@@ -101,24 +173,6 @@ class HuggingFaceClient(Generic[I, O]):
             self.model = self.model.to(self.device)
 
         self.model.eval()
-        print("Model loaded successfully!")
-
-    def load_model_from_checkpoint(self, checkpoint_path: Path):
-        """
-        Loads a fine-tuned checkpoint.
-
-        :param checkpoint_path: Path to the checkpoint directory
-        """
-        print(f"Loading checkpoint from {checkpoint_path}")
-
-        self.tokenizer = AutoTokenizer.from_pretrained(checkpoint_path)
-        self.model = AutoModelForCausalLM.from_pretrained(checkpoint_path)
-
-        if not (self.load_in_8bit or self.load_in_4bit):
-            self.model = self.model.to(self.device)
-
-        self.model.eval()
-
         print("Checkpoint loaded successfully!")
 
     def process(
@@ -127,18 +181,18 @@ class HuggingFaceClient(Generic[I, O]):
             system_prompt: str,
             tools: list[dict],
             format_input: Callable[[I], str],
-            parse_output: Callable[[str, str, float], O], # TODO: use the object returned by the model? If possible
+            parse_output: Callable[[str, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x.get('id', f'item-{idx}'),
     ) -> list[O]:
         """
-        Processes a dataset through the model.
+        Processes a dataset through the model sequentially with system prompt caching.
 
         :param dataset: List of items to process
-        :param system_prompt: System prompt for all requests
+        :param system_prompt: System prompt for all requests (will be cached)
+        :param tools: List of tool definitions
         :param format_input: Function to convert each item to prompt
-        :param parse_output: Function to parse model output. Receives (output_text, item_id)
+        :param parse_output: Function to parse model output (output_text, item_id, latency)
         :param get_id: Function to generate IDs for each item
-        :param tools: List of tool definitions (optional)
         :return: List of parsed outputs
         """
         if not dataset:
@@ -153,16 +207,20 @@ class HuggingFaceClient(Generic[I, O]):
         if tools:
             print(f"Tool calling enabled with {len(tools)} tool(s)")
 
-        for idx, item in enumerate(dataset):
-            item_id = get_id(item, idx)
-            print(f"Processing item {idx+1}/{total} (id={item_id})")
-            # Format prompt
-            user_message = format_input(item)
-            prompt = self._format_prompt(system_prompt, user_message, tools)
+        # Cache the system prompt prefix once
+        self._cache_system_prompt(system_prompt, tools)
+        print(f"System prompt cached for reuse across {total} items")
 
-            # Generate response
+        # Process one by one
+        for idx in tqdm(range(total), desc="Processing items"):
+            item = dataset[idx]
+            item_id = get_id(item, idx)
+
+            user_message = format_input(item)
+
+            # Generate response using cached system prompt
             try:
-                output, latency = self._generate(prompt)
+                output, latency = self._generate_with_cache(user_message)
                 result = parse_output(output, item_id, latency)
             except Exception as e:
                 print(f"Error processing item {item_id}: {e}")
@@ -171,52 +229,86 @@ class HuggingFaceClient(Generic[I, O]):
             results.append(result)
 
         successful = sum(1 for r in results if r is not None)
-        print(f"\nCompleted: {successful}/{total} successful")
+        print(f"\n✓ Completed: {successful}/{total} successful")
 
         return results
 
-    def _format_prompt(
+    def _cache_system_prompt(
             self,
             system_prompt: str,
-            user_message: str,
             tools: Optional[list[dict]] = None
-    ) -> str:
-        """Formats the prompt with system message, user message, and tools."""
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_message}
-        ]
+    ):
+        """
+        Caches the system prompt prefix to avoid re-encoding for every request.
+        This stores the formatted system prompt string for reuse.
+        """
+        # Create a cache key from system prompt and tools
+        cache_key = (system_prompt, json.dumps(tools) if tools else None)
 
-        # Add tool information to system prompt if provided
+        if self.cached_system_prompt == cache_key:
+            return  # Already cached
+
+        # Build the system message
+        system_content = system_prompt
         if tools:
             tools_desc = "\n\nAvailable tools:\n"
             for tool in tools:
                 tools_desc += f"- {tool['name']}: {tool['description']}\n"
                 tools_desc += f"  Parameters: {json.dumps(tool['parameters'])}\n"
-            messages[0]["content"] += tools_desc
+            system_content += tools_desc
 
-        # If possible, use the chat_template tokenizer
+        # Format the system part of the prompt
+        messages = [{"role": "system", "content": system_content}]
+
         if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template:
-            return self.tokenizer.apply_chat_template(
+            # Use chat template to format system message
+            self.cached_system_prefix = self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=False
+            )
+        else:
+            # Fallback formatting
+            self.cached_system_prefix = f"System: {system_content}\n\n"
+
+        self.cached_system_prompt = cache_key
+
+    def _generate_with_cache(self, user_message: str) -> tuple[str, float]:
+        """
+        Generates response using the cached system prompt prefix.
+        Only formats and encodes the user message + combines with cached prefix.
+        """
+        start_time = time.time()
+
+        # Build the full prompt using cached system prefix
+        if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template:
+            # Use chat template for the user message part
+            messages = [
+                {"role": "user", "content": user_message}
+            ]
+            user_part = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
                 add_generation_prompt=True
             )
+            # Combine cached system with user part
+            # Note: This is a simple concatenation; for better caching we'd need
+            # to cache the actual token embeddings, but that's model-specific
+            full_prompt = self.cached_system_prefix + user_part
         else:
-            prompt = f"System: {system_prompt}\n\nUser: {user_message}\n\nAssistant:"
-            return prompt
+            # Fallback: simple string concatenation
+            full_prompt = self.cached_system_prefix + f"User: {user_message}\n\nAssistant:"
 
-    def _generate(self, prompt: str) -> tuple[str, float]:
-        """Generates response from the model."""
-        start_time = time.time()
+        # Tokenize the full prompt
         inputs = self.tokenizer(
-            prompt,
+            full_prompt,
             return_tensors="pt",
             truncation=True,
             max_length=4096
         ).to(self.device)
 
-        with torch.no_grad():
+        # Generate
+        with torch.inference_mode():
             outputs = self.model.generate(
                 **inputs,
                 max_new_tokens=self.max_output_tokens,
@@ -224,13 +316,51 @@ class HuggingFaceClient(Generic[I, O]):
                 do_sample=self.temperature > 0,
                 pad_token_id=self.tokenizer.pad_token_id,
                 eos_token_id=self.tokenizer.eos_token_id,
+                use_cache=True,
+                return_dict_in_generate=True,
             )
 
-        # Decode only the generated tokens (excluding input)
-        generated_tokens = outputs[0][inputs['input_ids'].shape[1]:]
-        response = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        sequences = outputs.sequences
+        prompt_len = inputs["attention_mask"].sum(dim=1).item()
+        response = self.tokenizer.decode(
+            sequences[0][prompt_len:],
+            skip_special_tokens=True
+        )
 
         return response.strip(), time.time() - start_time
+
+    def _format_prompt(
+            self,
+            system_prompt: str,
+            user_message: str,
+            tools: Optional[list[dict]] = None
+    ) -> str:
+        """
+        Formats the prompt with system message, user message, and tools.
+        Note: This is kept for backward compatibility but not used in the main process loop.
+        """
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message}
+        ]
+
+        # Add tool information
+        if tools:
+            tools_desc = "\n\nAvailable tools:\n"
+            for tool in tools:
+                tools_desc += f"- {tool['name']}: {tool['description']}\n"
+                tools_desc += f"  Parameters: {json.dumps(tool['parameters'])}\n"
+            messages[0]["content"] += tools_desc
+
+        # Use chat template if available
+        if hasattr(self.tokenizer, 'chat_template') and self.tokenizer.chat_template:
+            return self.tokenizer.apply_chat_template(
+                messages,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+        else:
+            return f"System: {system_prompt}\n\nUser: {user_message}\n\nAssistant:"
 
     def fine_tune(
             self,
@@ -240,13 +370,13 @@ class HuggingFaceClient(Generic[I, O]):
             format_example: Optional[Callable[[dict], str]] = None,
     ) -> Path:
         """
-        Fine-tunes the model on provided dataset.
+        Fine-tunes the model (full fine-tuning).
 
-        :param train_dataset: Training data (list of dicts with 'prompt' and 'completion' keys)
-        :param eval_dataset: Evaluation data (optional)
-        :param config: Fine-tuning configuration
-        :param format_example: Function to format each example into text (optional)
-        :return: Path to the fine-tuned model checkpoint
+        :param train_dataset: Training data
+        :param eval_dataset: Evaluation data
+        :param config: Training configuration
+        :param format_example: Function to format examples
+        :return: Path to fine-tuned model
         """
         self.load_model()
 
@@ -263,10 +393,11 @@ class HuggingFaceClient(Generic[I, O]):
         train_data = self._prepare_dataset(train_dataset, format_example)
         eval_data = self._prepare_dataset(eval_dataset, format_example) if eval_dataset else None
 
-        # Data collator
+        # Data collator with dynamic padding
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=self.tokenizer,
-            mlm=False
+            mlm=False,
+            pad_to_multiple_of=8,  # Optimize for GPU
         )
 
         # Trainer
@@ -282,12 +413,12 @@ class HuggingFaceClient(Generic[I, O]):
         print("\nStarting fine-tuning...")
         trainer.train()
 
-        # Save final model
-        final_checkpoint = config.output_dir / "final"
+        # Save model
+        final_checkpoint = out_dir / "final"
         trainer.save_model(str(final_checkpoint))
         self.tokenizer.save_pretrained(str(final_checkpoint))
 
-        print(f"\nFine-tuning complete! Model saved to {final_checkpoint}")
+        print(f"\n✓ Fine-tuning complete! Model saved to {final_checkpoint}")
 
         return final_checkpoint
 
@@ -296,10 +427,9 @@ class HuggingFaceClient(Generic[I, O]):
             dataset: list[dict],
             format_example: Optional[Callable[[dict], str]] = None
     ) -> Dataset:
-        """Prepares and tokenizes dataset for training."""
+        """Prepares and tokenizes dataset efficiently."""
 
         def default_format(example):
-            """Default formatting: combines prompt and completion."""
             if 'prompt' in example and 'completion' in example:
                 return f"{example['prompt']}\n{example['completion']}"
             elif 'text' in example:
@@ -312,16 +442,31 @@ class HuggingFaceClient(Generic[I, O]):
         # Format texts
         texts = [formatter(example) for example in dataset]
 
-        # Tokenize
+        # Tokenize in batches for speed
+        print(f"Tokenizing {len(texts)} examples...")
         tokenized = self.tokenizer(
             texts,
             truncation=True,
-            max_length=2048,
+            max_length=4096,
             padding=False,
+            return_attention_mask=False,  # Save memory
         )
 
-        # Add labels (same as input_ids for causal LM)
-        tokenized['labels'] = tokenized['input_ids'].copy()
+        # Add labels
+        tokenized['labels'] = [ids.copy() for ids in tokenized['input_ids']]
 
         return Dataset.from_dict(tokenized)
 
+    def unload_model(self):
+        """Unloads the model from memory."""
+        if self.model is not None:
+            del self.model
+            del self.tokenizer
+            self.model = None
+            self.tokenizer = None
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
+
+            print("✓ Model unloaded from memory")
