@@ -1,7 +1,7 @@
 import time
 from typing import TypeVar, Generic, Callable, Optional
 from tqdm import tqdm
-from ollama import Client
+from ollama import Client, ChatResponse
 
 I = TypeVar("I")
 O = TypeVar("O")
@@ -14,10 +14,10 @@ class OllamaInferenceClient(Generic[I, O]):
     """
 
     def __init__(
-        self,
-        model: str,
-        max_output_tokens: int = 512,
-        temperature: float = 1.0,
+            self,
+            model: str,
+            max_output_tokens: int = 512,
+            temperature: float = 1.0,
     ):
         """
         Initialize Ollama client.
@@ -35,12 +35,12 @@ class OllamaInferenceClient(Generic[I, O]):
         print(f"🚀 Initialized OllamaInferenceClient for {self.model_name}")
 
     def process(
-        self,
-        dataset: list[I],
-        system_prompt: str,
-        format_input: Callable[[I], str],
-        parse_output: Callable[[str, str, float], O],
-        get_id: Callable[[I, int], str] = lambda x, idx: x.get("id", f"item-{idx}"),
+            self,
+            dataset: list[I],
+            system_prompt: str,
+            format_input: Callable[[I], str],
+            parse_output: Callable[[ChatResponse, str, float], O],
+            get_id: Callable[[I, int], str] = lambda x, idx: x.get("id", f"item-{idx}"),
     ) -> list[O]:
         """
         Process a dataset sequentially using Ollama.
@@ -79,7 +79,7 @@ class OllamaInferenceClient(Generic[I, O]):
         print(f"\n✅ Completed: {successful}/{total} successful")
         return results
 
-    def _generate(self, system_prompt: str, user_message: str) -> tuple[str, float]:
+    def _generate(self, system_prompt: str, user_message: str) -> tuple[ChatResponse, float]:
         """
         Generate a response using the Ollama package.
 
@@ -106,20 +106,4 @@ class OllamaInferenceClient(Generic[I, O]):
         )
 
         latency = time.time() - start_time
-        return response.content.strip(), latency
-
-    def list_models(self) -> list[dict]:
-        """List available Ollama models."""
-        models = self.client.list_models()
-        print("\n📚 Available Ollama models:")
-        for model in models:
-            print(f"  - {model['name']}")
-        return models
-
-    def unload_model(self):
-        """Explicitly stop the model (optional)."""
-        try:
-            self.client.stop_model(self.model_name)
-            print(f"✓ Model {self.model_name} stopped")
-        except Exception as e:
-            print(f"⚠️ Could not stop model {self.model_name}: {e}")
+        return response, latency
