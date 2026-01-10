@@ -1,8 +1,8 @@
-from enum import StrEnum
+from enum import Enum
 from pydantic import BaseModel
 
 
-class WeaponName(StrEnum):
+class WeaponName(str, Enum):
     FIST = 'Fist',
     CHAINSAW = 'Chainsaw',
     PISTOL = 'Pistol',
@@ -15,7 +15,7 @@ class WeaponName(StrEnum):
     NONE = ''
 
 
-class MonsterType(StrEnum):
+class MonsterType(str, Enum):
     ZOMBIEMAN = 'Zombieman',
     SHOTGUN_GUY = 'ShotgunGuy',
     IMP = 'DoomImp'
@@ -28,7 +28,7 @@ class MonsterType(StrEnum):
     SPIDER_MASTERMIND = 'SpiderMastermind'
 
 
-class AimedAtType(StrEnum):
+class AimedAtType(str, Enum):
     ACTOR = 'Actor'
     MONSTER = 'Monster'
     WALL = 'Wall'
