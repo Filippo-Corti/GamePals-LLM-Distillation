@@ -1,70 +1,59 @@
 """
 Intent Clustering Library
 
-A module for clustering and analyzing intent data from LLM outputs.
-Provides functions for embedding, clustering, and preparing evaluation datasets.
+Clusters LLM commanding inputs by intent and creates evaluation datasets.
 """
 
 import json
+from dataclasses import asdict
 from pathlib import Path
-from typing import List, Dict, Optional, Union
+from typing import Optional, Union, Any
 
 import numpy as np
 import pandas as pd
 from sklearn.cluster import KMeans
 from sentence_transformers import SentenceTransformer
 
+from core.utils.types import LLMCommandingInput, LLMCommandingOutput
 
-# -----------------------------
-# IO Functions
-# -----------------------------
 
-def load_jsonl(path: Union[str, Path]) -> List[Dict]:
+def load_jsonl(path: Union[str, Path]) -> list[dict]:
+    """Load JSONL file into list of dicts."""
     path = Path(path)
     with open(path, "r", encoding="utf-8") as f:
         return [json.loads(line) for line in f]
 
 
-def save_jsonl(data: List[Dict], path: Union[str, Path]) -> None:
+def save_jsonl(data: list[dict], path: Union[str, Path]) -> None:
+    """Save list of dicts to JSONL file."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-
     with open(path, "w", encoding="utf-8") as f:
         for row in data:
             f.write(json.dumps(row) + "\n")
 
 
-# -----------------------------
-# Embedding + Clustering
-# -----------------------------
-
 def embed_intents(
-        examples: List[Dict],
-        intent_field: str = "intent",
+        intents: list[str],
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
         batch_size: int = 32,
-        show_progress: bool = True
 ) -> np.ndarray:
     """
-    Embed the intent field from examples using sentence transformers.
+    Embed intent strings using sentence transformers.
 
     Args:
-        examples: List of dictionaries containing intent data
-        intent_field: Name of the field containing intent text
-        model_name: Name of the sentence transformer model to use
+        intents: list of intent strings
+        model_name: Sentence transformer model name
         batch_size: Batch size for encoding
-        show_progress: Whether to show progress bar
 
     Returns:
-        NumPy array of embeddings (n_samples, embedding_dim)
+        Array of embeddings (n_samples, embedding_dim)
     """
     model = SentenceTransformer(model_name)
-    intents = [ex[intent_field] for ex in examples]
-
     embeddings = model.encode(
         intents,
         batch_size=batch_size,
-        show_progress_bar=show_progress,
+        show_progress_bar=True,
         normalize_embeddings=True
     )
     return embeddings
@@ -73,229 +62,186 @@ def embed_intents(
 def cluster_intents(
         embeddings: np.ndarray,
         n_clusters: int,
-        seed: int = 42,
-        **kmeans_kwargs
+        seed: int = 42
 ) -> np.ndarray:
     """
     Cluster embeddings using K-Means.
 
     Args:
-        embeddings: Array of embeddings to cluster
-        n_clusters: Number of clusters to create
-        seed: Random seed for reproducibility
-        **kmeans_kwargs: Additional arguments to pass to KMeans
+        embeddings: Array of embeddings
+        n_clusters: Number of clusters
+        seed: Random seed
 
     Returns:
-        Array of cluster IDs (one per example)
+        Array of cluster IDs
     """
     km = KMeans(
         n_clusters=n_clusters,
         random_state=seed,
-        n_init="auto",
-        **kmeans_kwargs
+        n_init="auto"
     )
     return km.fit_predict(embeddings)
 
 
-def add_cluster_labels(
-        examples: List[Dict],
-        cluster_ids: np.ndarray,
-        cluster_field: str = "intent_cluster"
-) -> List[Dict]:
-    """
-    Add cluster IDs to examples in-place.
-
-    Args:
-        examples: List of example dictionaries
-        cluster_ids: Array of cluster assignments
-        cluster_field: Field name for cluster ID
-
-    Returns:
-        Updated examples list (modified in-place)
-    """
-    for ex, cid in zip(examples, cluster_ids):
-        ex[cluster_field] = int(cid)
-    return examples
-
-
-# -----------------------------
-# Subset Extraction
-# -----------------------------
-
-def extract_balanced_subset(
-        examples: List[Dict],
-        per_cluster: int,
-        cluster_field: str = "intent_cluster",
-        seed: int = 42
+def cluster_and_build_dataframe(
+        inputs: list[LLMCommandingInput],
+        outputs: list[LLMCommandingOutput],
+        n_clusters: int = 10,
+        per_cluster: Optional[int] = None,
+        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+        seed: int = 42,
 ) -> pd.DataFrame:
     """
-    Extract a balanced subset of examples from each cluster.
+    Cluster inputs by intent and build evaluation dataframe.
 
     Args:
-        examples: List of example dictionaries with cluster assignments
-        per_cluster: Maximum number of examples to sample per cluster
-        cluster_field: Name of the cluster ID field
-        seed: Random seed for sampling
+        inputs: list of LLMCommandingInput dataclass objects
+        outputs: list of LLMCommandingOutput dataclass objects
+        n_clusters: Number of clusters to create
+        per_cluster: If provided, sample this many examples per cluster for labeling
+        model_name: Sentence transformer model
+        seed: Random seed
 
     Returns:
-        DataFrame containing the balanced subset
+        DataFrame with columns: input_id, game_state, user_command, chosen_actions,
+        latency, intent, reason, cluster_id, selected_for_labeling, [action_types], label
     """
-    df = pd.DataFrame(examples)
+    # Convert dataclasses to dicts
 
+    # Build lookup for inputs by id
+    input_lookup = {inp.id: inp for inp in inputs}
+
+    # Extract intents from inputs for clustering
+    intent_list = [inp.user_command.command.intent for inp in inputs]
+
+    # Cluster
+    print("🔢 Embedding intents...")
+    embeddings = embed_intents(
+        intent_list,
+        model_name=model_name,
+    )
+
+    print("🧩 Clustering...")
+    cluster_ids = cluster_intents(embeddings, n_clusters=n_clusters, seed=seed)
+
+    # Build dataframe rows
     rows = []
-    for cluster_id, group in df.groupby(cluster_field):
-        if len(group) <= per_cluster:
-            rows.append(group)
-        else:
-            sampled = group.sample(n=per_cluster, random_state=seed).copy()
-            rows.append(sampled)
+    for output, cluster_id in zip(outputs, cluster_ids):
+        input_id = output.input_id
+        inp = input_lookup.get(input_id, {})
 
-    subset = pd.concat(rows, ignore_index=True)
-    return subset
-
-
-# -----------------------------
-# CSV Preparation
-# -----------------------------
-
-def prepare_manual_eval_csv(
-        df: pd.DataFrame,
-        rubric_columns: Optional[Dict[str, str]] = None,
-        keep_columns: Optional[List[str]] = None
-) -> pd.DataFrame:
-    """
-    Prepare a DataFrame for manual evaluation with rubric columns.
-
-    Args:
-        df: Input DataFrame
-        rubric_columns: Dict mapping rubric column names to default values
-        keep_columns: List of columns to keep in output (None = keep all)
-
-    Returns:
-        DataFrame with rubric columns added and filtered
-    """
-    df = df.copy()
-
-    # Default rubric columns
-    if rubric_columns is None:
-        rubric_columns = {
-            "rubric_correctness": "",
-            "rubric_redundancy": "",
-            "rubric_order": "",
-            "rubric_notes": ""
+        row = {
+            'input_id': input_id,
+            'game_state': inp.game_state.state,
+            'user_command': inp.user_command.command,
+            'chosen_actions': output.actions,
+            'latency': output.latency,
+            'intent': inp.user_command.command.intent,
+            'reason': output.reason,
+            'cluster_id': int(cluster_id),
+            'selected_for_labeling': False,
+            'action_fully_correct': '',
+            'action_unnecessary': '',
+            'action_imprecise_sequentiality': '',
+            'action_imprecise_parameters': '',
+            'action_harming_sequentiality': '',
+            'action_harming_parameters': '',
+            'action_missing': '',
+            'action_harming': '',
+            'action_wrong_syntax': '',
+            'label': ''
         }
 
-    # Add rubric columns if they don't exist
-    for col, default in rubric_columns.items():
-        if col not in df.columns:
-            df[col] = default
+        rows.append(row)
 
-    # Filter columns if specified
-    if keep_columns is not None:
-        available_cols = [c for c in keep_columns if c in df.columns]
-        df = df[available_cols]
+    df = pd.DataFrame(rows)
+
+    # Mark selected for labeling if per_cluster specified
+    if per_cluster is not None:
+        print(f"🧪 Selecting {per_cluster} examples per cluster for labeling...")
+        selected_indices = []
+
+        for cluster_id in df['cluster_id'].unique():
+            cluster_mask = df['cluster_id'] == cluster_id
+            cluster_indices = df[cluster_mask].index.tolist()
+
+            if len(cluster_indices) <= per_cluster:
+                selected_indices.extend(cluster_indices)
+            else:
+                np.random.seed(seed)
+                sampled = np.random.choice(
+                    cluster_indices,
+                    size=per_cluster,
+                    replace=False
+                )
+                selected_indices.extend(sampled)
+
+        df.loc[selected_indices, 'selected_for_labeling'] = True
 
     return df
 
 
-# -----------------------------
-# Pipeline Functions
-# -----------------------------
+def save_evaluation_csv(
+        df: pd.DataFrame,
+        output_path: Union[str, Path],
+) -> Path:
+    """
+    Save evaluation dataframe to CSV.
 
-def cluster_and_sample_pipeline(
-        examples: List[Dict],
+    Args:
+        df: Evaluation dataframe
+        output_path: Path to save CSV
+
+    Returns:
+        Path where CSV was saved
+    """
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    df.to_csv(output_path, index=False)
+    return output_path
+
+
+# Convenience function
+def run_clustering_pipeline(
+        inputs: list[Any],
+        outputs: list[Any],
+        out_dir: Path,
         n_clusters: int = 10,
         per_cluster: int = 5,
-        intent_field: str = "intent",
-        cluster_field: str = "intent_cluster",
-        model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
-        seed: int = 42,
-        show_progress: bool = True
-) -> tuple[List[Dict], pd.DataFrame]:
+        seed: int = 42
+) -> tuple[pd.DataFrame, Path, Optional[Path]]:
     """
-    Complete pipeline: embed, cluster, and extract balanced subset.
+    Complete pipeline: cluster, build dataframe, and save CSVs.
 
     Args:
-        examples: List of example dictionaries
-        n_clusters: Number of clusters to create
-        per_cluster: Examples to sample per cluster
-        intent_field: Field containing intent text
-        cluster_field: Field name for cluster assignments
-        model_name: Sentence transformer model name
+        inputs: LLMCommandingInput dataclass objects
+        outputs: LLMCommandingOutput dataclass objects
+        out_dir: Directory for output files
+        n_clusters: Number of clusters
+        per_cluster: Examples per cluster for labeling
         seed: Random seed
-        show_progress: Whether to show progress bars
 
     Returns:
-        Tuple of (clustered_examples, subset_dataframe)
+        Tuple of (dataframe, full_csv_path, labeling_csv_path)
     """
-    # Embed
-    embeddings = embed_intents(
-        examples,
-        intent_field=intent_field,
-        model_name=model_name,
-        show_progress=show_progress
-    )
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Cluster
-    cluster_ids = cluster_intents(embeddings, n_clusters=n_clusters, seed=seed)
-
-    # Add labels
-    clustered_examples = add_cluster_labels(
-        examples,
-        cluster_ids,
-        cluster_field=cluster_field
-    )
-
-    # Extract subset
-    subset_df = extract_balanced_subset(
-        clustered_examples,
+    # Run clustering
+    df = cluster_and_build_dataframe(
+        inputs=inputs,
+        outputs=outputs,
+        n_clusters=n_clusters,
         per_cluster=per_cluster,
-        cluster_field=cluster_field,
-        seed=seed
+        seed=seed,
     )
 
-    return clustered_examples, subset_df
+    full_path = None
+    labeling_path = None
 
+    # Save full dataset
+    full_path = out_dir / "full_dataset_with_clusters.csv"
+    save_evaluation_csv(df, full_path)
+    print(f"💾 Saved full dataset to {full_path}")
 
-def save_evaluation_files(
-        clustered_examples: List[Dict],
-        subset_df: pd.DataFrame,
-        output_dir: Union[str, Path],
-        clustered_filename: str = "teacher_with_intent_clusters.jsonl",
-        eval_filename: str = "manual_eval_subset.csv",
-        eval_columns: Optional[List[str]] = None
-) -> tuple[Path, Path]:
-    """
-    Save clustered data and evaluation CSV to disk.
-
-    Args:
-        clustered_examples: Examples with cluster assignments
-        subset_df: Subset DataFrame for evaluation
-        output_dir: Directory to save files
-        clustered_filename: Filename for clustered JSONL
-        eval_filename: Filename for evaluation CSV
-        eval_columns: Columns to include in eval CSV (None = use defaults)
-
-    Returns:
-        Tuple of (clustered_path, eval_csv_path)
-    """
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save clustered data
-    clustered_path = output_dir / clustered_filename
-    save_jsonl(clustered_examples, clustered_path)
-
-    # Prepare and save evaluation CSV
-    if eval_columns is None:
-        eval_columns = [
-            "id", "intent_cluster", "intent", "command",
-            "state", "actions", "rubric_correctness",
-            "rubric_redundancy", "rubric_order", "rubric_notes"
-        ]
-
-    eval_df = prepare_manual_eval_csv(subset_df, keep_columns=eval_columns)
-    eval_csv_path = output_dir / eval_filename
-    eval_df.to_csv(eval_csv_path, index=False)
-
-    return clustered_path, eval_csv_path
+    return df, full_path, labeling_path
