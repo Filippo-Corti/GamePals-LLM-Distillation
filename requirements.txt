@@ -14,3 +14,4 @@ python-dotenv
 openai
 ollama
 sentence-transformers
+python-Levenshtein

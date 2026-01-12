@@ -14,7 +14,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sentence_transformers import SentenceTransformer
 
-from core.utils.types import LLMCommandingInput, LLMCommandingOutput
+from core.utils.types import LLMCommandingInput, LLMCommandingOutput, LLMCommandingLabelledDataPoint
 
 
 def load_jsonl(path: Union[str, Path]) -> list[dict]:
@@ -130,29 +130,22 @@ def cluster_and_build_dataframe(
         input_id = output.input_id
         inp = input_lookup.get(input_id, {})
 
-        row = {
-            'input_id': input_id,
-            'game_state': inp.game_state.state,
-            'user_command': inp.user_command.command,
-            'chosen_actions': output.actions,
-            'latency': output.latency,
-            'intent': inp.user_command.command.intent,
-            'reason': output.reason,
-            'cluster_id': int(cluster_id),
-            'selected_for_labeling': False,
-            'action_fully_correct': '',
-            'action_unnecessary': '',
-            'action_imprecise_sequentiality': '',
-            'action_imprecise_parameters': '',
-            'action_harming_sequentiality': '',
-            'action_harming_parameters': '',
-            'action_missing': '',
-            'action_harming': '',
-            'action_wrong_syntax': '',
-            'label': ''
-        }
+        row = LLMCommandingLabelledDataPoint(
+            input_id=input_id,
+            game_state=inp.game_state.state.get_prompt_ready(),
+            command=inp.user_command.command.command,
+            command_intent=inp.user_command.command.intent,
+            command_explicitness=inp.user_command.command.explicitness,
+            command_atomicity=float(inp.user_command.command.atomicity),
+            command_contextuality=float(inp.user_command.command.contextuality),
+            game_actions=output.actions.__str__(),
+            latency=output.latency,
+            reason_if_failed=output.reason,
+            cluster_id=int(cluster_id),
+            selected_for_labelling=False
+        )
 
-        rows.append(row)
+        rows.append(asdict(row))
 
     df = pd.DataFrame(rows)
 
