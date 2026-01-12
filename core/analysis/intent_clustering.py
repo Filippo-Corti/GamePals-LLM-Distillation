@@ -210,7 +210,7 @@ def run_clustering_pipeline(
         n_clusters: int = 10,
         per_cluster: int = 5,
         seed: int = 42
-) -> tuple[pd.DataFrame, Path, Optional[Path]]:
+) -> tuple[pd.DataFrame, Path]:
     """
     Complete pipeline: cluster, build dataframe, and save CSVs.
 
@@ -223,7 +223,7 @@ def run_clustering_pipeline(
         seed: Random seed
 
     Returns:
-        Tuple of (dataframe, full_csv_path, labeling_csv_path)
+        Tuple of (dataframe, full_csv_path)
     """
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -236,12 +236,9 @@ def run_clustering_pipeline(
         seed=seed,
     )
 
-    full_path = None
-    labeling_path = None
-
     # Save full dataset
     full_path = out_dir / "full_dataset_with_clusters.csv"
     save_evaluation_csv(df, full_path)
     print(f"💾 Saved full dataset to {full_path}")
 
-    return df, full_path, labeling_path
+    return df, full_path
