@@ -13,6 +13,7 @@ Given a game state, your goal is to label it with plausible user commands that a
   - Linguistic Form (e.g., imperative vs request, short vs descriptive)
   - Intent (e.g., combat, navigation, survival, exploration, ...)
   - Explicitness, Atomicity or Contextuality (as defined below)
+- Try to produce commands that vary in both phrasing and tactical approach, so that each line is a distinct player choice.
 - The user commands should not reference internal game mechanics, state variables, or assistant reasoning
 - The user commands should stimulate the gaming assistant into using all the controls at their disposal. Do not hyperfixate on only a couple of them: be creative but realistic.
 - Do not generate commands that are impossible or meaningless given the game state (e.g., shooting when no weapon has ammo, attacking when no monsters are present).
@@ -55,6 +56,7 @@ The parameters should be set following these strict conditions:
   - Commands that require identifying entities from the current game state (for example, "Head towards the closest exit") should usually be >= 0.7.
   - Commands specifying exact movements or counts (for example, "Turn around and walk 10 meters, then jump") should usually be <= 0.2
 
+> Do NOT include any text outside the JSON objects. Every line must be a valid JSON with the above keys.
 
 # Example 1
 
