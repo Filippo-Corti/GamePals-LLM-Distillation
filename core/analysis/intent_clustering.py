@@ -17,22 +17,6 @@ from sentence_transformers import SentenceTransformer
 from core.utils.types import LLMCommandingInput, LLMCommandingOutput, LLMCommandingLabelledDataPoint
 
 
-def load_jsonl(path: Union[str, Path]) -> list[dict]:
-    """Load JSONL file into list of dicts."""
-    path = Path(path)
-    with open(path, "r", encoding="utf-8") as f:
-        return [json.loads(line) for line in f]
-
-
-def save_jsonl(data: list[dict], path: Union[str, Path]) -> None:
-    """Save list of dicts to JSONL file."""
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        for row in data:
-            f.write(json.dumps(row) + "\n")
-
-
 def embed_intents(
         intents: list[str],
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
@@ -83,6 +67,7 @@ def cluster_intents(
     return km.fit_predict(embeddings)
 
 
+# TODO: evaluate if actually useful
 def cluster_and_build_dataframe(
         inputs: list[LLMCommandingInput],
         outputs: list[LLMCommandingOutput],
