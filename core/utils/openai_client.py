@@ -134,7 +134,7 @@ class OpenAIClient(Generic[I, O]):
 
             request = {
                 "model": self.model,
-                "inputs": [{
+                "input": [{
                     "role": "developer",
                     "content": [{"type": "input_text", "text": system_prompt}]
                 }, {
