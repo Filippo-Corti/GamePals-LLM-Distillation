@@ -39,3 +39,18 @@ EVERY TIME: USE THE SAME SELECTED INPUTS.
 
 
 ---
+
+
+Annotation notes:
+- The model is not precise with timings.
+- Some user commands are not possible for the model (at level 2) - or are with very weird phrasings
+
+Reasonable fixes and new pipeline:
+1) Move to Level 3 (from Level 2)
+2) Improve the prompt for game actions a little bit (on Sequentiality)
+3) Keep the commands as they are: no time to regenerate them
+4) Save all the commands already clustered and with a field "selected_for_labeling"
+5) Run the Teacher only on selected_for_labeling -> evaluate them using the rubric. Use reasoning 'low', if many empty returns use reasoning 'none' and temperature 0.0.
+6) Hope everything is at least decent on step 5 -> do the same for a student
+
+Then we'll think about the training...
