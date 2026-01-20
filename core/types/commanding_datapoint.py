@@ -1,4 +1,14 @@
 from dataclasses import dataclass
+from enum import Enum
+
+
+class DataPointLabel(str, Enum):
+    FULLY_CORRECT = "FC"
+    CORRECT_BUT_NOT_OPTIMAL = "CNO"
+    OPERATIONALLY_WRONG = "OW"
+    CONCEPTUALLY_WRONG = "CW"
+    SYNTACTICALLY_WRONG = "SW"
+
 
 @dataclass
 class LLMCommandingDataPoint:
@@ -29,4 +39,17 @@ class LLMCommandingLabelledDataPoint(LLMCommandingDataPoint):
     action_missing: int = 0
     action_harming: int = 0
     action_wrong_syntax: int = 0
-    label: str | None = None
+    label: DataPointLabel | None = None
+
+    def infer_label(self):
+        """Sets self.label based on the actions classification"""
+        if self.action_wrong_syntax > 0:
+            self.label = DataPointLabel.SYNTACTICALLY_WRONG
+        elif self.action_missing > 0 or self.action_harming > 0:
+            self.label = DataPointLabel.CONCEPTUALLY_WRONG
+        elif self.action_harming_parameters > 0 or self.action_harming_sequentiality > 0:
+            self.label = DataPointLabel.OPERATIONALLY_WRONG
+        elif self.action_unnecessary > 0 or self.action_imprecise_parameters > 0 or self.action_imprecise_sequentiality > 0:
+            self.label = DataPointLabel.CORRECT_BUT_NOT_OPTIMAL
+        else:
+            self.label = DataPointLabel.FULLY_CORRECT

@@ -56,7 +56,6 @@ class OpenAIClient(Generic[I, O]):
         self.temperature = temperature
         self.tool_choice = tool_choice
         self.working_dir = working_dir
-        self.working_dir.mkdir(parents=True, exist_ok=True)
 
     def process(
             self,
@@ -180,6 +179,7 @@ class OpenAIClient(Generic[I, O]):
             get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
             batch_size: int = 1
     ) -> list:
+        self.working_dir.mkdir(parents=True, exist_ok=True)
         results = dict()
         total = len(dataset)
         num_batches = math.ceil(total / batch_size)
