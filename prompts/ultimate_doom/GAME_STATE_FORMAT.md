@@ -8,7 +8,7 @@ AIMED_AT:
     interactable: <yes/no>
 
 MONSTERS:  
-    - (<monster_type>, <health>, <distance>, <relative_angle>, <relative_pitch>)
+    - (<target_id> <monster_type>, <health>, <distance>, <relative_angle>, <relative_pitch>)
     
 INVENTORY:
     current_slot: <int>

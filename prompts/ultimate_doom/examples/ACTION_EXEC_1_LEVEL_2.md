@@ -6,7 +6,7 @@ AIMED_AT:
     interactable: no
 
 MONSTERS (count=1):
-    - (DoomImp, 60, 968.24, -10.56, 12.32)
+    - (MONSTER_1, DoomImp, 60, 968.24, -10.56, 12.32)
 
 INVENTORY:
     current_slot: 2

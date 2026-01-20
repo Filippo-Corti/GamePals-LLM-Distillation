@@ -133,9 +133,10 @@ class DoomGameState(BaseModel):
         # --- MONSTERS ---
         monsters = state.get("MONSTERS", [])
         lines.append(f"MONSTERS (count={len(monsters)}):")
-        for m in monsters:
+        for idx, m in enumerate(monsters):
             lines.append(
-                f"  - ({m['monsterType']}, "
+                f"  - (MONSTER_{idx}, "
+                f"{m['monsterType']}, "
                 f"{m['monsterHealth']}, "
                 f"{m['distance']:.2f}, "
                 f"{m['relativeAngle']:.2f}, "
