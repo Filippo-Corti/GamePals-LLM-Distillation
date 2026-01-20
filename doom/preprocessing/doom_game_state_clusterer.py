@@ -16,6 +16,14 @@ class DoomGameStateClusterer(DatasetClusterer):
             to_features=self.to_features
         )
 
+    # Apply clustering to keep unique situations
+
+    @staticmethod
+    def bucket_distance(d: float) -> float:
+        if d < 256: return 0.0
+        if d < 768: return 0.5
+        return 1.0
+
     @staticmethod
     def one_hot(value: str, vocab: list[str]) -> list[float]:
         vec = [0.0] * len(vocab)
@@ -24,60 +32,34 @@ class DoomGameStateClusterer(DatasetClusterer):
         return vec
 
     @staticmethod
-    def bucket_distance(d: float) -> float:
-        if d < 256:
-            return 0.0
-        elif d < 768:
-            return 0.5
-        else:
-            return 1.0
-
-    @staticmethod
     def ammo_status(ammo: int) -> float:
-        if ammo == 0:
-            return 0.0
-        elif ammo < 10:
-            return 0.33
-        elif ammo < 40:
-            return 0.66
-        else:
-            return 1.0
+        if ammo == 0: return 0.0
+        if ammo < 10: return 0.33
+        if ammo < 40: return 0.66
+        return 1.0
 
-    @staticmethod
-    def to_features(state: DoomGameState) -> np.ndarray:
-        features = []
+    @classmethod
+    def to_feature_vector(cls, gs: DoomGameState) -> np.ndarray:
+        features = list()
+        features.append(float(len(gs.MONSTERS)))  # Feature #1: Number of Monsters
 
-        # --- Number of monsters ---
-        features.append(float(len(state.MONSTERS)))
-
-        # --- Closest enemy distance ---
-        if state.MONSTERS:
-            closest = min(m.distance for m in state.MONSTERS)
-            features.append(DoomGameStateClusterer.bucket_distance(closest))
+        if gs.MONSTERS:
+            closest = min(m.distance for m in gs.MONSTERS)
+            features.append(cls.bucket_distance(closest))  # Feature #2: Distance to the closest Monster
+            types = [m.monsterType for m in gs.MONSTERS]
+            common_type = Counter(types).most_common(1)[0][0]
+            features.extend(cls.one_hot(common_type, list(MonsterType)))  # Feature #3: OHE Most common Enemy Type
         else:
             features.append(1.0)
+            features.extend([0.0] * len(MonsterType))
 
-        # --- Most common enemy type (one-hot) ---
-        if state.MONSTERS:
-            types = [m.monsterType for m in state.MONSTERS]
-            common_type = Counter(types).most_common(1)[0][0]
-        else:
-            common_type = None
+        slot = gs.INVENTORY.inventorySlots[gs.INVENTORY.currentSlot]
+        features.append(cls.ammo_status(slot.ammoCount))  # Feature #4: Ammunition count
 
-        features.extend(DoomGameStateClusterer.one_hot(common_type, list(MonsterType)))
+        features.extend(cls.one_hot(slot.weaponName.lower(), list(WeaponName)))  # Feature #5: OHE Current Weapon
 
-        # --- Ammo status ---
-        slot = state.INVENTORY.inventorySlots[state.INVENTORY.currentSlot]
-        features.append(DoomGameStateClusterer.ammo_status(slot.ammoCount))
+        features.append(float(gs.AIMED_AT.interactable))  # Feature #6: is aiming at interactable
 
-        # --- Weapon name (one-hot) ---
-        features.extend(DoomGameStateClusterer.one_hot(slot.weaponName.lower(), list(WeaponName)))
-
-        # --- Is aiming at interactable ---
-        features.append(float(state.AIMED_AT.interactable))
-
-        # --- Aimed-at type (one-hot) ---
-        aimed_type = state.AIMED_AT.entityType.lower() if state.AIMED_AT.entityType else "none"
-        features.extend(DoomGameStateClusterer.one_hot(aimed_type, list(AimedAtType)))
-
+        aimed_type = gs.AIMED_AT.entityType.lower() if gs.AIMED_AT.entityType else "none"
+        features.extend(cls.one_hot(aimed_type, list(AimedAtType)))  # Feature #6: OHE aimed at entity type
         return np.array(features, dtype=np.float32)

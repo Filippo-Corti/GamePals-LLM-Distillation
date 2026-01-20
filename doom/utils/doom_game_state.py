@@ -1,6 +1,8 @@
 from enum import Enum
 from pydantic import BaseModel
 
+from core.types.game_state import GameState
+
 
 class WeaponName(str, Enum):
     FIST = 'Fist',
@@ -80,19 +82,13 @@ class InventoryModel(BaseModel):
     inventorySlots: list[InventorySlotModel]
 
 
-class DoomGameState(BaseModel):
+class DoomGameState(GameState):
     AIMED_AT: AimedAtModel
     MONSTERS: list[MonsterModel]
     INVENTORY: InventoryModel
     GROUND_CHECK: GroundCheckModel
 
-    # TODO: Potentially abstract GameState class?
     def to_prompt_ready(self) -> str:
-        """
-        Returns the string representation of the game state, ready to be prompted to an LLM.
-
-        :return: the string representation of the game state
-        """
         d = self.model_dump()
         del d['GROUND_CHECK']
         del d['AIMED_AT']['horizontalAngle']

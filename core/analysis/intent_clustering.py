@@ -14,7 +14,7 @@ import pandas as pd
 from sklearn.cluster import KMeans
 from sentence_transformers import SentenceTransformer
 
-from core.utils.types import LLMCommandingInput, LLMCommandingOutput, LLMCommandingLabelledDataPoint
+from core.types import LLMCommandingInput, LLMCommandingOutput, LLMCommandingLabelledDataPoint
 
 
 def embed_intents(
