@@ -25,7 +25,7 @@ def lcs_action_type_f1(
     teacher_actions: list[str],
     student_actions: list[str],
 ) -> float:
-    """F1-Score computed on the types of actions in the Longest Common Subsequence"""
+    """F1-Score computed on the types of outputs in the Longest Common Subsequence"""
     t, s = teacher_actions, student_actions
     if not t and not s:
         return 1.0
@@ -56,7 +56,7 @@ def action_type_f1(
     teacher_actions: list[str],
     student_actions: list[str],
 ) -> float:
-    """F1-Score computed on the types of actions between student and teacher"""
+    """F1-Score computed on the types of outputs between student and teacher"""
     t = Counter(teacher_actions)
     s = Counter(student_actions)
 

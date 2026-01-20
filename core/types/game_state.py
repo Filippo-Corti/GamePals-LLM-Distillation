@@ -38,10 +38,10 @@ class GameStateEntry:
             json.dump([item.asdict() for item in x], f, indent=4)
 
     @staticmethod
-    def load_states(path: Path, cls: Type[T]) -> list["GameStateEntry"]:
+    def load_states(path: Path, gstype: Type[T]) -> list["GameStateEntry"]:
         with open(path, 'r') as f:
             items = json.load(f)
             x = list()
             for item in items:
-                x.append(GameStateEntry.fromdict(item, cls))
+                x.append(GameStateEntry.fromdict(item, gstype))
             return x

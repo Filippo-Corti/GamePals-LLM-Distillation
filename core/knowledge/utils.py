@@ -10,7 +10,7 @@ class UserCommandInfo:
     :ivar str command: the generated user command
     :ivar int game_state_idx: the index of the game state from which the command was generated
     :ivar float explicitness: a measure of how explicitly the command asks for something
-    :ivar float atomicity: a measure of how many atomic actions will likely be required to fulfill the command
+    :ivar float atomicity: a measure of how many atomic outputs will likely be required to fulfill the command
     :ivar float contextuality: a measure of how relevant the game state is to the execution of the command
     """
     command: str
