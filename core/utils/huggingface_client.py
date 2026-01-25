@@ -456,17 +456,3 @@ class HuggingFaceClient(Generic[I, O]):
         tokenized['labels'] = [ids.copy() for ids in tokenized['input_ids']]
 
         return Dataset.from_dict(tokenized)
-
-    def unload_model(self):
-        """Unloads the model from memory."""
-        if self.model is not None:
-            del self.model
-            del self.tokenizer
-            self.model = None
-            self.tokenizer = None
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-
-            print("✓ Model unloaded from memory")
