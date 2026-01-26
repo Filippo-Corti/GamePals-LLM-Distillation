@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from typing import Callable, Optional, Any
+from typing import TypeVar, Generic, Callable, Optional, Any
 import torch
 from transformers import (
     AutoModelForCausalLM,
@@ -19,8 +19,10 @@ from peft import (
 from datasets import Dataset
 from trl import SFTTrainer
 
+T = TypeVar('T')
 
-class HuggingFaceTrainingClient:
+
+class HuggingFaceTrainingClient(Generic[T]):
     """
     Optimized client for fine-tuning with LoRA/QLoRA.
 
@@ -67,14 +69,13 @@ class HuggingFaceTrainingClient:
         print(f"   QLoRA: {use_qlora}")
         print(f"   Flash Attention 2: {use_flash_attention_2}")
 
-    def load_model_for_training(self):
-        """Loads the model optimized for training."""
-        if self.model is not None:
+    def load_tokenizer(self):
+        """Loads just the tokenizer (lightweight, no model)."""
+        if self.tokenizer is not None:
             return
 
-        print(f"\n📦 Loading model for training: {self.model_name}")
+        print(f"\n📦 Loading tokenizer: {self.model_name}")
 
-        # Load tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(
             self.model_name,
             cache_dir=self.working_dir,
@@ -85,6 +86,18 @@ class HuggingFaceTrainingClient:
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
             self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+
+        print("   ✓ Tokenizer loaded successfully!\n")
+
+    def load_model_for_training(self):
+        """Loads the model optimized for training."""
+        # Load tokenizer first if not already loaded
+        self.load_tokenizer()
+
+        if self.model is not None:
+            return
+
+        print(f"\n📦 Loading model for training: {self.model_name}")
 
         # Model configuration
         model_kwargs: dict[str, Any] = {
@@ -135,8 +148,9 @@ class HuggingFaceTrainingClient:
 
     def fine_tune(
             self,
-            train_dataset: list[dict],
-            eval_dataset: Optional[list[dict]] = None,
+            train_dataset: list[T],
+            eval_dataset: Optional[list[T]],
+            format_example: Callable[[T, AutoTokenizer], str],
             output_dir: Path = Path("./checkpoints"),
             num_epochs: int = 3,
             batch_size: int = 4,
@@ -146,7 +160,6 @@ class HuggingFaceTrainingClient:
             lora_r: int = 64,
             lora_alpha: int = 16,
             lora_dropout: float = 0.05,
-            format_example: Optional[Callable[[dict], str]] = None,
             save_steps: int = 100,
             eval_steps: int = 100,
             warmup_ratio: float = 0.03,
@@ -156,6 +169,7 @@ class HuggingFaceTrainingClient:
 
         :param train_dataset: Training data
         :param eval_dataset: Evaluation data
+        :param format_example: Function to format examples (has access to self.tokenizer)
         :param output_dir: Directory to save checkpoints
         :param num_epochs: Number of training epochs
         :param batch_size: Per-device batch size
@@ -165,12 +179,15 @@ class HuggingFaceTrainingClient:
         :param lora_r: LoRA rank (higher = more parameters, better quality, slower)
         :param lora_alpha: LoRA alpha (scaling factor)
         :param lora_dropout: LoRA dropout
-        :param format_example: Function to format examples
         :param save_steps: Save checkpoint every N steps
         :param eval_steps: Evaluate every N steps
         :param warmup_ratio: Warmup ratio for learning rate scheduler
         :return: Path to final checkpoint
         """
+        # Load tokenizer first so format_example can use it
+        self.load_tokenizer()
+
+        # Now load the full model
         self.load_model_for_training()
 
         output_dir = Path(output_dir)
@@ -294,25 +311,15 @@ class HuggingFaceTrainingClient:
 
     def _prepare_dataset(
             self,
-            dataset: list[dict],
-            format_example: Optional[Callable[[dict], str]],
+            dataset: list[T],
+            format_example: Callable[[T, AutoTokenizer], str],
             max_length: int,
     ) -> Dataset:
         """Prepares and tokenizes dataset efficiently."""
 
-        def default_format(example):
-            if 'prompt' in example and 'completion' in example:
-                return f"{example['prompt']}\n{example['completion']}"
-            elif 'text' in example:
-                return example['text']
-            else:
-                raise ValueError("Example must have 'prompt'+'completion' or 'text' keys")
-
-        formatter = format_example or default_format
-
         # Format texts
         print(f"📝 Formatting {len(dataset)} examples...")
-        texts = [formatter(example) for example in dataset]
+        texts = [format_example(example, self.tokenizer) for example in dataset]
 
         # Tokenize
         print(f"🔤 Tokenizing...")
@@ -376,4 +383,3 @@ class HuggingFaceTrainingClient:
         self.tokenizer.save_pretrained(str(output_path))
 
         print(f"   ✓ Merged model saved to {output_path}")
-
