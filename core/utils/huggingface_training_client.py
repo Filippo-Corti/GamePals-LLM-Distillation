@@ -17,7 +17,6 @@ from peft import (
     TaskType,
 )
 from datasets import Dataset
-from trl import SFTTrainer
 
 T = TypeVar('T')
 
@@ -31,7 +30,6 @@ class HuggingFaceTrainingClient(Generic[T]):
     - Flash Attention 2 for 2-4x training speedup
     - Gradient checkpointing for memory efficiency
     - Paged optimizers for large batches
-    - SFT Trainer for better instruction tuning
     - Automatic mixed precision (bfloat16)
     """
 
@@ -223,11 +221,42 @@ class HuggingFaceTrainingClient(Generic[T]):
             self.model = get_peft_model(self.model, peft_config)
             self.model.print_trainable_parameters()
 
-        # Prepare datasets
-        train_data = self._prepare_dataset(train_dataset, format_example, max_seq_length)
-        eval_data = self._prepare_dataset(eval_dataset, format_example, max_seq_length) if eval_dataset else None
+        # Format datasets as text
+        print(f"📝 Formatting {len(train_dataset)} training examples...")
+        train_texts = [format_example(example, self.tokenizer) for example in train_dataset]
 
-        # Training arguments (heavily optimized)
+        if eval_dataset:
+            print(f"📝 Formatting {len(eval_dataset)} eval examples...")
+            eval_texts = [format_example(example, self.tokenizer) for example in eval_dataset]
+        else:
+            eval_texts = None
+
+        # Tokenize
+        print(f"🔤 Tokenizing...")
+        train_encodings = self.tokenizer(
+            train_texts,
+            truncation=True,
+            max_length=max_seq_length,
+            padding=False
+        )
+        train_encodings["labels"] = [ids.copy() for ids in train_encodings["input_ids"]]
+        train_data = Dataset.from_dict(train_encodings)
+
+        if eval_texts:
+            eval_encodings = self.tokenizer(
+                eval_texts,
+                truncation=True,
+                max_length=max_seq_length,
+                padding=False
+            )
+            eval_encodings["labels"] = [ids.copy() for ids in eval_encodings["input_ids"]]
+            eval_data = Dataset.from_dict(eval_encodings)
+        else:
+            eval_data = None
+
+        print(f"   ✓ Datasets prepared")
+
+        # Training arguments
         training_args = TrainingArguments(
             output_dir=str(output_dir),
             num_train_epochs=num_epochs,
@@ -246,7 +275,7 @@ class HuggingFaceTrainingClient(Generic[T]):
             warmup_ratio=warmup_ratio,
 
             # Mixed precision
-            bf16=True,  # Use bfloat16 (better than fp16)
+            bf16=True,
             fp16=False,
 
             # Logging
@@ -269,13 +298,9 @@ class HuggingFaceTrainingClient(Generic[T]):
             gradient_checkpointing_kwargs={"use_reentrant": False},
 
             # Misc
-            report_to="none",  # Disable wandb/tensorboard
+            report_to="none",
             seed=42,
             data_seed=42,
-
-            # Group batches by length for efficiency
-            group_by_length=True,
-            length_column_name="length",
         )
 
         # Data collator
@@ -285,15 +310,13 @@ class HuggingFaceTrainingClient(Generic[T]):
             pad_to_multiple_of=8,
         )
 
-        # Use SFTTrainer for instruction tuning (better than standard Trainer)
-        trainer = SFTTrainer(
+        # Use standard Trainer
+        trainer = Trainer(
             model=self.model,
             args=training_args,
             train_dataset=train_data,
             eval_dataset=eval_data,
             data_collator=data_collator,
-            max_seq_length=max_seq_length,
-            packing=False,  # Can enable for more efficiency if sequences are short
         )
 
         # Train
@@ -308,37 +331,6 @@ class HuggingFaceTrainingClient(Generic[T]):
         print(f"\n✅ Fine-tuning complete! Model saved to {final_checkpoint}")
 
         return final_checkpoint
-
-    def _prepare_dataset(
-            self,
-            dataset: list[T],
-            format_example: Callable[[T, AutoTokenizer], str],
-            max_length: int,
-    ) -> Dataset:
-        """Prepares and tokenizes dataset efficiently."""
-
-        # Format texts
-        print(f"📝 Formatting {len(dataset)} examples...")
-        texts = [format_example(example, self.tokenizer) for example in dataset]
-
-        # Tokenize
-        print(f"🔤 Tokenizing...")
-        tokenized = self.tokenizer(
-            texts,
-            truncation=True,
-            max_length=max_length,
-            padding=False,  # Dynamic padding is more efficient
-            return_attention_mask=True,
-        )
-
-        # Add labels and lengths
-        tokenized['labels'] = [ids.copy() for ids in tokenized['input_ids']]
-        tokenized['length'] = [len(ids) for ids in tokenized['input_ids']]
-
-        dataset_obj = Dataset.from_dict(tokenized)
-
-        print(f"   ✓ Dataset prepared with {len(dataset_obj)} examples")
-        return dataset_obj
 
     def load_checkpoint(self, checkpoint_path: Path):
         """Loads a LoRA checkpoint for further training or inference."""

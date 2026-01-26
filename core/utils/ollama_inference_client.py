@@ -1,3 +1,4 @@
+import json
 import time
 from typing import TypeVar, Generic, Callable, Optional
 from tqdm import tqdm
@@ -38,6 +39,7 @@ class OllamaInferenceClient(Generic[I, O]):
             self,
             dataset: list[I],
             system_prompt: str,
+            tools: list[dict],
             format_input: Callable[[I], str],
             parse_output: Callable[[ChatResponse, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x.get("id", f"item-{idx}"),
@@ -47,6 +49,7 @@ class OllamaInferenceClient(Generic[I, O]):
 
         :param dataset: List of items
         :param system_prompt: System prompt (can include tool definitions)
+        :param tools: Tool definitions
         :param format_input: Convert each item to user message
         :param parse_output: Parse model output
         :param get_id: Generate IDs for items
@@ -66,7 +69,9 @@ class OllamaInferenceClient(Generic[I, O]):
 
             try:
                 output, latency = self._generate(
-                    system_prompt=system_prompt, user_message=user_message
+                    system_prompt=system_prompt,
+                    tools=tools,
+                    user_message=user_message
                 )
                 result = parse_output(output, item_id, latency)
             except Exception as e:
@@ -79,7 +84,12 @@ class OllamaInferenceClient(Generic[I, O]):
         print(f"\n✅ Completed: {successful}/{total} successful")
         return results
 
-    def _generate(self, system_prompt: str, user_message: str) -> tuple[ChatResponse, float]:
+    def _generate(
+            self,
+            system_prompt: str,
+            tools: list[dict],
+            user_message: str
+    ) -> tuple[ChatResponse, float]:
         """
         Generate a response using the Ollama package.
 
@@ -87,13 +97,23 @@ class OllamaInferenceClient(Generic[I, O]):
         :param user_message: user message string
         :return: tuple of (output string, latency in seconds)
         """
-        start_time = time.time()
+        # Build conversation
+        system_content = system_prompt
+        if tools:
+            tools_desc = "\n\nAvailable tools:\n"
+            for tool in tools:
+                tools_desc += f"- {tool['name']}: {tool['description']}\n"
+                tools_desc += f"  Parameters: {json.dumps(tool['parameters'])}\n"
+            system_content += tools_desc
+
 
         # Ollama package chat call
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message},
         ]
+
+        start_time = time.time()
 
         response = self.client.chat(
             model=self.model_name,

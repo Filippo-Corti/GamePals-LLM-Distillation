@@ -192,7 +192,6 @@ class HuggingFaceInferenceClient(Generic[I, O]):
 
         successful = sum(1 for r in results if r is not None)
         print(f"\n✅ Completed: {successful}/{total} successful")
-
         return results
 
     def _generate(
@@ -205,6 +204,8 @@ class HuggingFaceInferenceClient(Generic[I, O]):
         Generates a response using proper chat template formatting.
         """
         # Build conversation
+        total_start = time.time()
+        t1 = time.time()
         system_content = system_prompt
         if tools:
             tools_desc = "\n\nAvailable tools:\n"
@@ -217,10 +218,12 @@ class HuggingFaceInferenceClient(Generic[I, O]):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_message}
         ]
+        print(f"  [1] Message building: {time.time() - t1:.3f}s")
 
         start_time = time.time()
 
         # Use the model's chat template
+        t2 = time.time()
         if hasattr(self.tokenizer, 'apply_chat_template') and self.tokenizer.chat_template:
             prompt = self.tokenizer.apply_chat_template(
                 messages,
@@ -230,16 +233,22 @@ class HuggingFaceInferenceClient(Generic[I, O]):
         else:
             # Fallback for models without chat templates
             prompt = f"System: {system_prompt}\n\nUser: {user_message}\n\nAssistant:"
+        print(f"  [2] Chat template: {time.time() - t2:.3f}s")
+        print(f"  [2a] Prompt length: {len(prompt)} chars")
 
         # Tokenize
+        t3 = time.time()
         inputs = self.tokenizer(
             prompt,
             return_tensors="pt",
             truncation=True,
             max_length=4096
         ).to(self.device)
+        print(f"  [3] Tokenization: {time.time() - t3:.3f}s")
+        print(f"  [3a] Input tokens: {inputs.input_ids.shape[1]}")
 
         # Generate
+        t4 = time.time()
         with torch.inference_mode():
             outputs = self.model.generate(
                 **inputs,
@@ -250,13 +259,24 @@ class HuggingFaceInferenceClient(Generic[I, O]):
                 eos_token_id=self.tokenizer.eos_token_id,
                 use_cache=True,
             )
+        print(f"  [4] Generation: {time.time() - t4:.3f}s")
+        print(f"  [4a] Output tokens: {outputs.shape[1]}")
+
 
         # Decode output
+        t5 = time.time()
         prompt_len = inputs.attention_mask.sum().item()
         response = self.tokenizer.decode(
             outputs[0][prompt_len:],
             skip_special_tokens=True
         )
+
+        print(f"  [5] Decoding: {time.time() - t5:.3f}s")
+        print(f"  [5a] Response length: {len(response)} chars")
+
+        latency = time.time() - total_start
+        print(f"  [TOTAL]: {latency:.3f}s\n")
+
 
         latency = time.time() - start_time
         return response.strip(), latency

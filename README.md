@@ -32,4 +32,7 @@ Short-term TODOs:
 Next steps:
 - Run all inputs using the teacher IN BATCH MODE. I should re-evaluate but I could also just replace the outputs together with the evaluation.
 
+
+REMEMBER: validity metrics are computed LATER ON
+
 ---
