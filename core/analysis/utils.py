@@ -2,9 +2,6 @@
 import Levenshtein
 from collections import Counter
 
-from core.utils.types import GameAction
-
-
 def exact_match(teacher: str, student: str) -> bool:
     """Exact match between teacher and student"""
     return teacher.strip() == student.strip()

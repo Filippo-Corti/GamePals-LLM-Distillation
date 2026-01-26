@@ -30,6 +30,8 @@ class LLMCommandingDataPoint:
 class LLMCommandingLabelledDataPoint(LLMCommandingDataPoint):
     exact_match: float | None = None
     edit_distance: float | None = None
+    action_type_f1: float | None = None
+    action_type_f1_lcs: float | None = None
     action_full_correct: int = 0
     action_unnecessary: int = 0
     action_imprecise_sequentiality: int = 0
