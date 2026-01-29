@@ -184,6 +184,7 @@ class HuggingFaceInferenceClient(Generic[I, O]):
                     user_message=user_message
                 )
                 result = parse_output(output, item_id, latency)
+                print(result)
             except Exception as e:
                 print(f"\n❌ Error processing item {item_id}: {e}")
                 result = None
@@ -268,7 +269,7 @@ class HuggingFaceInferenceClient(Generic[I, O]):
         prompt_len = inputs.attention_mask.sum().item()
         response = self.tokenizer.decode(
             outputs[0][prompt_len:],
-            skip_special_tokens=True
+            skip_special_tokens=False
         )
 
         print(f"  [5] Decoding: {time.time() - t5:.3f}s")

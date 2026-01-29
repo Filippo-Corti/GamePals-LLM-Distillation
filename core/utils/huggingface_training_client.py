@@ -231,26 +231,33 @@ class HuggingFaceTrainingClient(Generic[T]):
         else:
             eval_texts = None
 
-        # Tokenize
-        print(f"🔤 Tokenizing...")
-        train_encodings = self.tokenizer(
-            train_texts,
-            truncation=True,
-            max_length=max_seq_length,
-            padding=False
-        )
-        train_encodings["labels"] = [ids.copy() for ids in train_encodings["input_ids"]]
-        train_data = Dataset.from_dict(train_encodings)
+        # Create datasets from text first
+        print(f"🔤 Creating and tokenizing datasets...")
+        train_data = Dataset.from_dict({"text": train_texts})
 
-        if eval_texts:
-            eval_encodings = self.tokenizer(
-                eval_texts,
+        def tokenize_function(examples):
+            """Tokenize examples - labels will be created by DataCollator."""
+            return self.tokenizer(
+                examples["text"],
                 truncation=True,
                 max_length=max_seq_length,
-                padding=False
             )
-            eval_encodings["labels"] = [ids.copy() for ids in eval_encodings["input_ids"]]
-            eval_data = Dataset.from_dict(eval_encodings)
+
+        train_data = train_data.map(
+            tokenize_function,
+            batched=True,
+            remove_columns=["text"],
+            desc="Tokenizing training data"
+        )
+
+        if eval_texts:
+            eval_data = Dataset.from_dict({"text": eval_texts})
+            eval_data = eval_data.map(
+                tokenize_function,
+                batched=True,
+                remove_columns=["text"],
+                desc="Tokenizing eval data"
+            )
         else:
             eval_data = None
 
