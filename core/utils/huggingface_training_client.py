@@ -8,13 +8,6 @@ from transformers import (
     TrainingArguments,
     Trainer,
     DataCollatorForLanguageModeling,
-    BitsAndBytesConfig,
-)
-from peft import (
-    LoraConfig,
-    get_peft_model,
-    prepare_model_for_kbit_training,
-    TaskType,
 )
 from datasets import Dataset
 
@@ -23,14 +16,7 @@ T = TypeVar('T')
 
 class HuggingFaceTrainingClient(Generic[T]):
     """
-    Optimized client for fine-tuning with LoRA/QLoRA.
-
-    Key optimizations:
-    - QLoRA for efficient training on RTX 2060 and A100
-    - Flash Attention 2 for 2-4x training speedup
-    - Gradient checkpointing for memory efficiency
-    - Paged optimizers for large batches
-    - Automatic mixed precision (bfloat16)
+    Simple client for full-precision fine-tuning.
     """
 
     def __init__(
@@ -38,24 +24,21 @@ class HuggingFaceTrainingClient(Generic[T]):
             model: str,
             device: Optional[str] = None,
             working_dir: Path = Path("./data/huggingface"),
-            use_qlora: bool = True,
             use_flash_attention_2: bool = True,
             hf_token: Optional[str] = None,
     ):
         """
-        Creates an optimized training client.
+        Creates a training client.
 
         :param model: Hugging Face model name or path
         :param device: Device to use ('cuda', 'cpu', or None for auto)
         :param working_dir: Directory to cache models
-        :param use_qlora: Use QLoRA (4-bit quantization + LoRA) for efficient training
-        :param use_flash_attention_2: Use Flash Attention 2
+        :param use_flash_attention_2: Use Flash Attention 2 (A100 optimization)
         :param hf_token: Hugging Face API token
         """
         self.model_name = model
         self.device = device or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.working_dir = working_dir
-        self.use_qlora = use_qlora
         self.use_flash_attention_2 = use_flash_attention_2
         self.hf_token = hf_token
 
@@ -64,11 +47,10 @@ class HuggingFaceTrainingClient(Generic[T]):
 
         print(f"🏋️  Initialized HuggingFaceTrainingClient for {self.model_name}")
         print(f"   Device: {self.device}")
-        print(f"   QLoRA: {use_qlora}")
         print(f"   Flash Attention 2: {use_flash_attention_2}")
 
     def load_tokenizer(self):
-        """Loads just the tokenizer (lightweight, no model)."""
+        """Loads the tokenizer."""
         if self.tokenizer is not None:
             return
 
@@ -88,8 +70,7 @@ class HuggingFaceTrainingClient(Generic[T]):
         print("   ✓ Tokenizer loaded successfully!\n")
 
     def load_model_for_training(self):
-        """Loads the model optimized for training."""
-        # Load tokenizer first if not already loaded
+        """Loads the model for training."""
         self.load_tokenizer()
 
         if self.model is not None:
@@ -103,27 +84,13 @@ class HuggingFaceTrainingClient(Generic[T]):
             'trust_remote_code': True,
             'token': self.hf_token,
             'low_cpu_mem_usage': True,
+            'torch_dtype': torch.bfloat16,  # Mixed precision for efficiency
         }
 
-        # Flash Attention 2
+        # Flash Attention 2 (A100 optimization)
         if self.use_flash_attention_2 and self.device == 'cuda':
             model_kwargs['attn_implementation'] = "flash_attention_2"
             print("   ⚡ Enabling Flash Attention 2")
-
-        # QLoRA configuration (recommended)
-        if self.use_qlora:
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_compute_dtype=torch.bfloat16,
-                bnb_4bit_use_double_quant=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_quant_storage=torch.bfloat16,  # Store in bfloat16
-            )
-            model_kwargs['quantization_config'] = bnb_config
-            print("   📉 Using QLoRA (4-bit quantization)")
-        else:
-            # Full precision training
-            model_kwargs['torch_dtype'] = torch.bfloat16
 
         # Load model
         self.model = AutoModelForCausalLM.from_pretrained(
@@ -131,16 +98,8 @@ class HuggingFaceTrainingClient(Generic[T]):
             **model_kwargs
         )
 
-        # Prepare for k-bit training (required for QLoRA)
-        if self.use_qlora:
-            self.model = prepare_model_for_kbit_training(
-                self.model,
-                use_gradient_checkpointing=True
-            )
-            print("   ✓ Model prepared for QLoRA training")
-        else:
-            # Enable gradient checkpointing for memory efficiency
-            self.model.gradient_checkpointing_enable()
+        # Enable gradient checkpointing for memory efficiency
+        self.model.gradient_checkpointing_enable()
 
         print("   ✓ Model loaded successfully!\n")
 
@@ -151,41 +110,35 @@ class HuggingFaceTrainingClient(Generic[T]):
             format_example: Callable[[T, AutoTokenizer], str],
             output_dir: Path = Path("./checkpoints"),
             num_epochs: int = 3,
-            batch_size: int = 4,
-            gradient_accumulation_steps: int = 4,
+            batch_size: int = 8,
+            gradient_accumulation_steps: int = 2,
             learning_rate: float = 2e-4,
             max_seq_length: int = 2048,
-            lora_r: int = 64,
-            lora_alpha: int = 16,
-            lora_dropout: float = 0.05,
             save_steps: int = 100,
             eval_steps: int = 100,
             warmup_ratio: float = 0.03,
     ) -> Path:
         """
-        Fine-tunes the model using LoRA/QLoRA.
+        Fine-tunes the model.
 
         :param train_dataset: Training data
         :param eval_dataset: Evaluation data
-        :param format_example: Function to format examples (has access to self.tokenizer)
+        :param format_example: Function to format examples
         :param output_dir: Directory to save checkpoints
         :param num_epochs: Number of training epochs
         :param batch_size: Per-device batch size
         :param gradient_accumulation_steps: Gradient accumulation steps
-        :param learning_rate: Peak learning rate
+        :param learning_rate: Learning rate
         :param max_seq_length: Maximum sequence length
-        :param lora_r: LoRA rank (higher = more parameters, better quality, slower)
-        :param lora_alpha: LoRA alpha (scaling factor)
-        :param lora_dropout: LoRA dropout
         :param save_steps: Save checkpoint every N steps
         :param eval_steps: Evaluate every N steps
         :param warmup_ratio: Warmup ratio for learning rate scheduler
         :return: Path to final checkpoint
         """
-        # Load tokenizer first so format_example can use it
+        # Load tokenizer first
         self.load_tokenizer()
 
-        # Now load the full model
+        # Load the model
         self.load_model_for_training()
 
         output_dir = Path(output_dir)
@@ -200,27 +153,6 @@ class HuggingFaceTrainingClient(Generic[T]):
         print(f"   Learning rate: {learning_rate}")
         print(f"   Max sequence length: {max_seq_length}")
 
-        if self.use_qlora:
-            print(f"   LoRA rank: {lora_r}")
-            print(f"   LoRA alpha: {lora_alpha}")
-            print(f"   LoRA dropout: {lora_dropout}")
-
-        # Apply LoRA
-        if self.use_qlora:
-            peft_config = LoraConfig(
-                r=lora_r,
-                lora_alpha=lora_alpha,
-                lora_dropout=lora_dropout,
-                bias="none",
-                task_type=TaskType.CAUSAL_LM,
-                target_modules=[
-                    "q_proj", "k_proj", "v_proj", "o_proj",
-                    "gate_proj", "up_proj", "down_proj",
-                ],  # Targets all attention and FFN layers
-            )
-            self.model = get_peft_model(self.model, peft_config)
-            self.model.print_trainable_parameters()
-
         # Format datasets as text
         print(f"📝 Formatting {len(train_dataset)} training examples...")
         train_texts = [format_example(example, self.tokenizer) for example in train_dataset]
@@ -231,12 +163,12 @@ class HuggingFaceTrainingClient(Generic[T]):
         else:
             eval_texts = None
 
-        # Create datasets from text first
+        # Create datasets
         print(f"🔤 Creating and tokenizing datasets...")
         train_data = Dataset.from_dict({"text": train_texts})
 
         def tokenize_function(examples):
-            """Tokenize examples - labels will be created by DataCollator."""
+            """Tokenize examples."""
             return self.tokenizer(
                 examples["text"],
                 truncation=True,
@@ -272,7 +204,7 @@ class HuggingFaceTrainingClient(Generic[T]):
             gradient_accumulation_steps=gradient_accumulation_steps,
 
             # Optimizer settings
-            optim="paged_adamw_8bit" if self.use_qlora else "adamw_torch_fused",
+            optim="adamw_torch_fused",  # Fast optimizer for A100
             learning_rate=learning_rate,
             weight_decay=0.01,
             max_grad_norm=1.0,
@@ -281,7 +213,7 @@ class HuggingFaceTrainingClient(Generic[T]):
             lr_scheduler_type="cosine",
             warmup_ratio=warmup_ratio,
 
-            # Mixed precision
+            # Mixed precision (bfloat16 is standard)
             bf16=True,
             fp16=False,
 
@@ -298,7 +230,7 @@ class HuggingFaceTrainingClient(Generic[T]):
             save_steps=save_steps,
             save_total_limit=3,
 
-            # Performance optimizations
+            # Performance
             dataloader_num_workers=4,
             dataloader_pin_memory=True,
             gradient_checkpointing=True,
@@ -310,14 +242,14 @@ class HuggingFaceTrainingClient(Generic[T]):
             data_seed=42,
         )
 
-        # Data collator
+        # Data collator (automatically creates labels from input_ids)
         data_collator = DataCollatorForLanguageModeling(
             tokenizer=self.tokenizer,
-            mlm=False,
+            mlm=False,  # Causal language modeling
             pad_to_multiple_of=8,
         )
 
-        # Use standard Trainer
+        # Trainer
         trainer = Trainer(
             model=self.model,
             args=training_args,
@@ -338,47 +270,3 @@ class HuggingFaceTrainingClient(Generic[T]):
         print(f"\n✅ Fine-tuning complete! Model saved to {final_checkpoint}")
 
         return final_checkpoint
-
-    def load_checkpoint(self, checkpoint_path: Path):
-        """Loads a LoRA checkpoint for further training or inference."""
-        from peft import PeftModel
-
-        print(f"📦 Loading checkpoint from {checkpoint_path}")
-
-        self.load_model_for_training()
-
-        # Load LoRA weights
-        self.model = PeftModel.from_pretrained(
-            self.model,
-            str(checkpoint_path),
-            is_trainable=True,
-        )
-
-        print("   ✓ Checkpoint loaded successfully!")
-
-    def merge_and_save(self, checkpoint_path: Path, output_path: Path):
-        """Merges LoRA weights with base model and saves."""
-        from peft import PeftModel
-
-        print(f"🔀 Merging LoRA weights from {checkpoint_path}")
-
-        # Load base model
-        self.load_model_for_training()
-
-        # Load LoRA weights
-        model = PeftModel.from_pretrained(
-            self.model,
-            str(checkpoint_path),
-        )
-
-        # Merge
-        merged_model = model.merge_and_unload()
-
-        # Save
-        output_path = Path(output_path)
-        output_path.mkdir(parents=True, exist_ok=True)
-
-        merged_model.save_pretrained(str(output_path))
-        self.tokenizer.save_pretrained(str(output_path))
-
-        print(f"   ✓ Merged model saved to {output_path}")
