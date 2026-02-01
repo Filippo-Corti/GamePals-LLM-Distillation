@@ -225,10 +225,8 @@ class HuggingFaceTrainingClient(Generic[T]):
             eval_strategy="steps" if eval_data else "no",
             eval_steps=eval_steps if eval_data else None,
 
-            # Saving
-            save_strategy="steps",
-            save_steps=save_steps,
-            save_total_limit=3,
+            # Saving (no saving due to lack of disk space)
+            save_strategy="no",
 
             # Performance
             dataloader_num_workers=4,
