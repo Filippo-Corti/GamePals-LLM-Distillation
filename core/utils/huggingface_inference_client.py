@@ -81,13 +81,14 @@ class HuggingFaceInferenceClient(Generic[I, O]):
 
         print(f"\n📦 Loading model: {self.model_name}")
 
-        # Load tokenizer
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_name,
-            cache_dir=self.working_dir,
-            trust_remote_code=True,
-            token=self.hf_token,
-        )
+        if not self.tokenizer:
+            # Load tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_name,
+                cache_dir=self.working_dir,
+                trust_remote_code=True,
+                token=self.hf_token,
+            )
 
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
