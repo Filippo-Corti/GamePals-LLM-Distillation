@@ -6,7 +6,7 @@ Pipeline:
 2. [X] Data Augmentation
 3. [X] Dataset Filtering
 4. [X] Teacher Action Generation
-5. [ ] Student Training Setup
+5. [X] Student Training Setup
 6. [ ] Teacher vs Student Comparison
 7. [ ] Repeat with Variations
 
@@ -25,13 +25,14 @@ Game-Specific Tasks:
 ---
 
 Short-term TODOs:
-- Re-run the student on the small dataset. I need to use Ollama, not HuggingFace (it should be quicker - but equivalent for everything else)
-- Try (at home) the training, on the small dataset.
-- Run the trained student. If possible, use Ollama.
+- Test the trained student again, removing |im_end|
+- Try to port the student to ollama and see if results are faster
+- Evaluate the student on the 50 instances
+- If results are alright, run the student on all instances
 
 Next steps:
-- Run all inputs using the teacher IN BATCH MODE. I should re-evaluate but I could also just replace the outputs together with the evaluation.
-
+- Compare the results from student and teacher
+- Do it all again with FunctionGemma
 
 REMEMBER: validity metrics are computed LATER ON
 
