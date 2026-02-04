@@ -8,3 +8,5 @@
 data/huggingface
 data/openai
 models/
+
+llama.cpp/

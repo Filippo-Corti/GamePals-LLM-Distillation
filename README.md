@@ -36,3 +36,15 @@ Next steps:
 REMEMBER: validity metrics are computed LATER ON
 
 ---
+
+# Convert HF to OLLAMA
+
+cd llama.cpp (or just download the built version)
+
+python convert_hf_to_gguf.py ../models/training/final --outfile qwen-commanding.gguf --outtype f16
+
+.\llama-quantize.exe qwen-model.gguf qwen-model-q4.gguf Q4_K_M
+
+Create a Modelfile (like the one in the repo)
+
+ollama create qwen-commanding -f .\Modelfile
