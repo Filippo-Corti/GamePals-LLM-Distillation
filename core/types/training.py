@@ -12,6 +12,7 @@ class TrainingEntryMetrics:
 
 @dataclass
 class TrainingEntry:
+    id: str
     game_state: str
     user_command: str
     expected_actions: str
