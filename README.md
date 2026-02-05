@@ -42,9 +42,10 @@ REMEMBER: validity metrics are computed LATER ON
 
 cd llama.cpp (or just download the built version)
 
-python convert_hf_to_gguf.py ../models/training/final --outfile qwen-commanding.gguf --outtype f16
+python convert_hf_to_gguf.py ../models/final --outfile qwen-commanding.gguf --outtype f16
 
-.\llama-quantize.exe qwen-model.gguf qwen-model-q4.gguf Q4_K_M
+cd llama-build
+.\llama-quantize.exe ../qwen-commanding.gguf ../qwen-commanding-q4.gguf Q4_K_M
 
 Create a Modelfile (like the one in the repo)
 
