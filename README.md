@@ -25,16 +25,8 @@ Game-Specific Tasks:
 ---
 
 Short-term TODOs:
-- Test the trained student again, removing |im_end|
-- Try to port the student to ollama and see if results are faster
-- Evaluate the student on the 50 instances
-- If results are alright, run the student on all instances
-
-Next steps:
-- Compare the results from student and teacher
-- Do it all again with FunctionGemma
-
-REMEMBER: validity metrics are computed LATER ON
+- Run a comparison notebook for differences between teacher and Qwen
+- Run all tests over again with FunctionGemma
 
 ---
 
