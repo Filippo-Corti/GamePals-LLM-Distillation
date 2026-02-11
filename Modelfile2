@@ -1,0 +1,9 @@
+FROM ./models/training2/final
+TEMPLATE """<start_of_turn>developer
+You are a game command parser that converts natural language commands into DSL instructions.<end_of_turn>
+<start_of_turn>user
+{{ .Prompt }}<end_of_turn>
+<start_of_turn>model
+"""
+PARAMETER stop "<end_of_turn>"
+PARAMETER stop "<eos>"

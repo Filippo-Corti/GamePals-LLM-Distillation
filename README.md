@@ -42,3 +42,12 @@ cd llama-build
 Create a Modelfile (like the one in the repo)
 
 ollama create qwen-commanding -f .\Modelfile
+
+
+---
+
+For FunctionGemma, you do not need to convert to GGUF. YOu can just do 
+
+ollama create fgemma-commanding -f Modelfile2 --quantize q4_k_m
+
+> Currently going with no quantization
