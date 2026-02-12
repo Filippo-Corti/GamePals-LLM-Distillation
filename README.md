@@ -41,7 +41,7 @@ cd llama-build
 
 Create a Modelfile (like the one in the repo)
 
-ollama create qwen-commanding -f .\Modelfile
+ollama create qwen-commanding -f .\Modelfile2
 
 
 ---
