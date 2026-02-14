@@ -7,8 +7,8 @@ Pipeline:
 3. [X] Dataset Filtering
 4. [X] Teacher Action Generation
 5. [X] Student Training Setup
-6. [ ] Teacher vs Student Comparison
-7. [ ] Repeat with Variations
+6. [X] Teacher vs Student Comparison
+7. [X] Repeat with Variations
 
 
 ---
@@ -25,8 +25,8 @@ Game-Specific Tasks:
 ---
 
 Short-term TODOs:
-- Run a comparison notebook for differences between teacher and Qwen
-- Run all tests over again with FunctionGemma
+- Fix the code mess
+- Fix the README
 
 ---
 
