@@ -53,5 +53,7 @@ class LLMCommandingLabelledDataPoint(LLMCommandingDataPoint):
             self.label = DataPointLabel.OPERATIONALLY_WRONG
         elif self.action_unnecessary > 0 or self.action_imprecise_parameters > 0 or self.action_imprecise_sequentiality > 0:
             self.label = DataPointLabel.CORRECT_BUT_NOT_OPTIMAL
-        else:
+        elif self.action_full_correct > 0:
             self.label = DataPointLabel.FULLY_CORRECT
+        else:
+            self.label = None

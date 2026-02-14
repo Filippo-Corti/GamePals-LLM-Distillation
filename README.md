@@ -30,6 +30,48 @@ Short-term TODOs:
 
 ---
 
+# Some data
+
+Teacher labels:
+FC:  42	CNO:   6	OW:   0	CW:   2	SW:   0	
+
+Teacher Latency:
+5.370 +- 2.718 (Median: 4.818)
+
+Qwen 1.5B (untrained):
+Labels: FC:   4	CNO:   6	OW:  11	CW:  14	SW:  15
+EM: 176 False (97%) - 6 True (3%)
+Edit Distance: 0.547 +- 0.250 (Median: 0.568)
+F1: 0.484 +- 0.349 (Median: 0.500)
+No interesting patterns
+Latency: 0.256 +- 0.201 (Median: 0.195)
+
+Qwen 1.5B (trained):
+Labels: FC:  38	CNO:  10	OW:   0	CW:   2	SW:   0	
+EM: 134 False (74%) - 48 True (26%)
+Edit Distance: 0.291 +- 0.303 (Median: 0.200)
+F1: 0.721 +- 0.331 (Median: 0.873)
+No interesting patterns
+Latency: 0.219 +- 0.127 (Median: 0.186)
+
+Qwen 0.5B (untrained):
+Labels: FC:   0	CNO:   0	OW:   0	CW:   1	SW:  49	
+EM: 176 False (100%) - 0 True (0%)
+Edit Distance: 0.803 +- 0.122 (Median: 0.803)
+F1: 0.174 +- 0.206 (Median: 0.0)
+No interesting patterns
+Latency: 0.425 +- 0.793 (Median: 0.167)
+
+Qwen 0.5B (trained):
+Labels: FC:  34	CNO:  11	OW:   0	CW:   4	SW:   1	
+EM: 133 False (73%) - 49 True (27%)
+Edit Distance: 0.293 +- 0.300 (Median: 0.201)
+F1: 0.730 +- 0.315 (Median: 0.809)
+No interesting patterns
+Latency: 0.164 +- 0.090 (Median: 0.142)
+
+---
+
 # Convert HF to OLLAMA
 
 cd llama.cpp (or just download the built version)
