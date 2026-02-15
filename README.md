@@ -1,95 +1,67 @@
 # Knowledge Distillation for GamePals LLM
 
-Pipeline:
+Partial automation is an interaction paradigm in which users delegate part of
+a system’s control to a software agent. 
 
-1. [X] Data Collection
-2. [X] Data Augmentation
-3. [X] Dataset Filtering
-4. [X] Teacher Action Generation
-5. [X] Student Training Setup
-6. [X] Teacher vs Student Comparison
-7. [X] Repeat with Variations
+Prior work has shown its potential to
+improve accessibility in video games by assisting players with disabilities in real-
+time control. However, experimental evidence also indicates that the lack of
+communication between user and software agent can lead to confusion and mis-
+understandings. 
+
+To address this limitation, large language models (LLMs) can
+interpret natural language voice commands and translate them into executable
+game actions. Although frontier LLMs are capable of this task, real-time game
+control imposes strict low-latency requirements, motivating the use of local mod-
+els. 
+
+In this work, we formalize human-commanded game control and distill the
+knowledge of a frontier teacher model (GPT-5.1) into two smaller local student
+models (Qwen2.5-1.5B-Instruct and Qwen2.5-0.5B-Instruct), evaluating whether
+they preserve the teacher’s capabilities while reducing inference latency. 
+Preliminary results show over a 20x reduction in response time while maintaining strong
+performance on more than 90% of the test set. 
+
+---
+
+# Knowledge Distillation Pipeline
+
+The full KD pipeline proposed for the task of **human-commanded game control** is contained in the 8 notebooks in this repository:
+
+1. [`Game State Processing`](01_game_state_processing.ipynb): build a dataset of suitable game states.
+2. [`User Commands Generation`](02_user_command_generation.ipynb): generate user commands associated with the game states, using the teacher model.
+3. [`Dataset Preparation`](03_dataset_preparation.ipynb): build the dataset of <game state, user command> pairs.
+4. [`Dataset Labeling`](04_dataset_labeling.ipynb): run inference on the teacher model, to get labels for each input pair.
+5. [`Untrained Student`](05_untrained_student.ipynb): run inference on the untrained student model, as baseline.
+6. [`Student Training`](06_student_training.ipynb): train the student on the human-commanded game control task.
+7. [`Trained Student`](07_trained_student.ipynb): re-run inference on the student model, after training.
+8. [`Model Comparisons`](08_model_comparisons.ipynb): compare results between teacher and student, as well as between different students.
+
+A representation of the KD Pipeline by Gemini:
+
+![KD Pipeline](./data/img/kd-pipeline.png)
+
+---
+
+# Content of this Repository
+
+This repository has the following structure:
+
+- `01..08_notebooks` contain the KD pipeline, as presented above.
+- [`data`](data) contains all data used and generated throughout the experiments.
+- [`prompts`](prompts) contains the generic templates for the prompts and filling parts for *The Ultimate Doom*.
+- [`src`](src) contains utility classes and functions used throughout the notebooks.
 
 
 ---
 
-Game-Specific Tasks:
+Author: Filippo Corti
 
-1) Collect Game States
-2) Mapping from a Game State to the Feature Vector used for filtering 
-3) Functions that make Perturbations of the Game State
-4) Some parts of the Data Augmentation prompt
-5) Some parts of the Main Task prompt
+Natural Language Procesing Project - A.Y. 2025/2026
 
+#### Useful References:
 
----
+- [The GamePals Project](https://everywarelab.di.unimi.it/index.php/15-research-projects/233-games-accessibility)
+- [Interviews to People using Shared Control](https://arxiv.org/abs/2601.11218)
+- [Partial Automation vs Human Cooperation - a study](https://arxiv.org/pdf/2509.02132)
 
-Short-term TODOs:
-- Fix the code mess
-- Fix the README
-
----
-
-# Some data
-
-Teacher labels:
-FC:  42	CNO:   6	OW:   0	CW:   2	SW:   0	
-
-Teacher Latency:
-5.370 +- 2.718 (Median: 4.818)
-
-Qwen 1.5B (untrained):
-Labels: FC:   4	CNO:   6	OW:  11	CW:  14	SW:  15
-EM: 176 False (97%) - 6 True (3%)
-Edit Distance: 0.547 +- 0.250 (Median: 0.568)
-F1: 0.484 +- 0.349 (Median: 0.500)
-No interesting patterns
-Latency: 0.256 +- 0.201 (Median: 0.195)
-
-Qwen 1.5B (trained):
-Labels: FC:  38	CNO:  10	OW:   0	CW:   2	SW:   0	
-EM: 134 False (74%) - 48 True (26%)
-Edit Distance: 0.291 +- 0.303 (Median: 0.200)
-F1: 0.721 +- 0.331 (Median: 0.873)
-No interesting patterns
-Latency: 0.219 +- 0.127 (Median: 0.186)
-
-Qwen 0.5B (untrained):
-Labels: FC:   0	CNO:   0	OW:   0	CW:   1	SW:  49	
-EM: 176 False (100%) - 0 True (0%)
-Edit Distance: 0.803 +- 0.122 (Median: 0.803)
-F1: 0.174 +- 0.206 (Median: 0.0)
-No interesting patterns
-Latency: 0.425 +- 0.793 (Median: 0.167)
-
-Qwen 0.5B (trained):
-Labels: FC:  34	CNO:  11	OW:   0	CW:   4	SW:   1	
-EM: 133 False (73%) - 49 True (27%)
-Edit Distance: 0.293 +- 0.300 (Median: 0.201)
-F1: 0.730 +- 0.315 (Median: 0.809)
-No interesting patterns
-Latency: 0.164 +- 0.090 (Median: 0.142)
-
----
-
-# Convert HF to OLLAMA
-
-cd llama.cpp (or just download the built version)
-
-python convert_hf_to_gguf.py ../models/final --outfile qwen-commanding.gguf --outtype f16
-
-cd llama-build
-.\llama-quantize.exe ../qwen-commanding.gguf ../qwen-commanding-q4.gguf Q4_K_M
-
-Create a Modelfile (like the one in the repo)
-
-ollama create qwen-commanding -f .\Modelfile2
-
-
----
-
-For FunctionGemma, you do not need to convert to GGUF. YOu can just do 
-
-ollama create fgemma-commanding -f Modelfile2 --quantize q4_k_m
-
-> Currently going with no quantization
