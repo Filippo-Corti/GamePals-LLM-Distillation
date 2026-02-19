@@ -6,14 +6,12 @@ a system’s control to a software agent.
 Prior work has shown its potential to
 improve accessibility in video games by assisting players with disabilities in real-
 time control. However, experimental evidence also indicates that the lack of
-communication between user and software agent can lead to confusion and mis-
-understandings. 
+communication between user and software agent can lead to confusion and misunderstandings. 
 
 To address this limitation, large language models (LLMs) can
 interpret natural language voice commands and translate them into executable
 game actions. Although frontier LLMs are capable of this task, real-time game
-control imposes strict low-latency requirements, motivating the use of local mod-
-els. 
+control imposes strict low-latency requirements, motivating the use of local models. 
 
 In this work, we formalize human-commanded game control and distill the
 knowledge of a frontier teacher model (GPT-5.1) into two smaller local student
