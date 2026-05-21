@@ -4,8 +4,9 @@ import math
 from pathlib import Path
 from typing import TypeVar, Generic, Callable, Optional
 from enum import Enum
+from pydantic import BaseModel
 from openai import OpenAI
-from openai.types.responses import Response
+from openai.types.responses import Response, ParsedResponse
 
 
 class ProcessingMode(Enum):
@@ -18,11 +19,38 @@ I = TypeVar('I')
 O = TypeVar('O')
 
 
+def _pydantic_to_strict_schema(model: type[BaseModel]) -> dict:
+    """
+    Converts a Pydantic model to a strict JSON Schema for batch JSONL requests.
+
+    The Responses API batch endpoint requires a raw JSON Schema in the request
+    body, so we cannot rely on the SDK's .parse() abstraction here. This helper
+    patches the generated schema so it satisfies OpenAI's strict mode:
+      - every object gets  additionalProperties: false
+      - every object's properties are all listed under required
+    """
+    def _make_strict(schema: dict) -> dict:
+        if schema.get("type") == "object":
+            props = schema.get("properties", {})
+            schema["additionalProperties"] = False
+            schema["required"] = list(props.keys())
+            for prop_schema in props.values():
+                _make_strict(prop_schema)
+        for sub in schema.get("$defs", {}).values():
+            _make_strict(sub)
+        if "items" in schema:
+            _make_strict(schema["items"])
+        return schema
+
+    return _make_strict(model.model_json_schema())
+
+
 class OpenAIClient(Generic[I, O]):
     """
     A client for processing datasets with OpenAI API.
 
-    Supports both sequential and batch processing modes.
+    Supports both sequential and batch processing modes, with optional
+    structured outputs via a Pydantic BaseModel schema.
     """
 
     def __init__(
@@ -39,14 +67,14 @@ class OpenAIClient(Generic[I, O]):
         """
         Creates an OpenAIClient instance.
 
-        :param model: OpenAI model to use (e.g., "gpt-4", "gpt-3.5-turbo")
+        :param model: OpenAI model to use (e.g., "gpt-4o", "gpt-4o-mini")
         :param mode: Processing mode (sequential or batch)
         :param max_output_tokens: Maximum tokens in model response (default: 1024)
         :param temperature: Sampling temperature (0-2) (default: 1.0)
         :param reasoning_effort: Reasoning effort for the model (default: none)
         :param tool_choice: Tool choice strategy - "auto", "none", "required", ... (default: "auto")
-        :param working_dir: Directory for temporary files
-        :param api_key: OpenAI API key (uses environment variable if not provided)
+        :param working_dir: Directory for temporary files used by batch mode
+        :param api_key: OpenAI API key (uses OPENAI_API_KEY env variable if not provided)
         """
         self.client = OpenAI(api_key=api_key) if api_key else OpenAI()
         self.model = model
@@ -63,10 +91,11 @@ class OpenAIClient(Generic[I, O]):
             system_prompt: str,
             tools: list[dict],
             format_input: Callable[[I], str],
-            parse_output: Callable[[Response, str, float], O],
+            parse_output: Callable[[Response | ParsedResponse, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x.get('id', f'item-{idx}'),
             batch_size: int = 1,
             request_delay: float = 0.0,
+            output_schema: Optional[type[BaseModel]] = None,
     ) -> list[O]:
         """
         Processes a dataset through the OpenAI API.
@@ -75,11 +104,20 @@ class OpenAIClient(Generic[I, O]):
         :param system_prompt: System prompt for all requests
         :param tools: List of tool call signatures
         :param format_input: Function to convert each item to its prompt-ready representation
-        :param parse_output: Function to convert each OpenAI Response to the output type. Also receives the input id and the latency (s) of the function.
+        :param parse_output: Function to convert each OpenAI Response to the output type.
+            Also receives the input id and the latency (s) of the call.
+            In sequential mode with output_schema set, receives a ParsedResponse —
+            access the typed result via response.output_parsed.
+            In batch mode with output_schema set, receives a standard Response —
+            deserialise via output_schema.model_validate_json(response.output_text).
         :param get_id: Function that generates IDs for each item (default: "item-{index}")
-        :param batch_size: Batch size (default: 1)
-        :param request_delay: Request delay (default: 0)
-        :return: List of BatchResult objects with parsed outputs
+        :param batch_size: Number of items per batch file (batch mode only, default: 1)
+        :param request_delay: Seconds to wait between requests (sequential mode only, default: 0)
+        :param output_schema: Optional Pydantic BaseModel class that activates structured
+            outputs. The SDK handles schema serialisation automatically in sequential mode
+            (.parse()); batch mode converts it to a strict JSON Schema for the JSONL body.
+            When None (default), plain-text responses are returned as before.
+        :return: List of parsed outputs in the same order as the input dataset
         """
         if not dataset:
             return []
@@ -88,6 +126,8 @@ class OpenAIClient(Generic[I, O]):
         print(f"Model: {self.model}")
         if tools:
             print(f"Tool calling enabled with {len(tools)} tool(s)")
+        if output_schema is not None:
+            print(f"Structured outputs enabled (schema: '{output_schema.__name__}')")
 
         match self.mode:
             case ProcessingMode.SEQUENTIAL:
@@ -99,6 +139,7 @@ class OpenAIClient(Generic[I, O]):
                     parse_output=parse_output,
                     get_id=get_id,
                     request_delay=request_delay,
+                    output_schema=output_schema,
                 )
             case ProcessingMode.BATCH:
                 return self._process_batch(
@@ -109,6 +150,7 @@ class OpenAIClient(Generic[I, O]):
                     parse_output=parse_output,
                     get_id=get_id,
                     batch_size=batch_size,
+                    output_schema=output_schema,
                 )
 
     def _process_sequential(
@@ -117,9 +159,10 @@ class OpenAIClient(Generic[I, O]):
             system_prompt: str,
             tools: list[dict],
             format_input: Callable[[I], str],
-            parse_output: Callable[[Response, str, float], O],
+            parse_output: Callable[[Response | ParsedResponse, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
             request_delay: float = 0.0,
+            output_schema: Optional[type[BaseModel]] = None,
     ) -> list:
         results = []
         total = len(dataset)
@@ -128,7 +171,6 @@ class OpenAIClient(Generic[I, O]):
 
         for idx, item in enumerate(dataset):
             item_id = get_id(item, idx)
-
             print(f"[{idx + 1}/{total}] Processing item with id={item_id}...")
 
             request = {
@@ -152,9 +194,19 @@ class OpenAIClient(Generic[I, O]):
 
             try:
                 start_time = time.time()
-                response = self.client.responses.create(**request)
-                latency = time.time() - start_time
 
+                if output_schema is not None:
+                    # .parse() handles schema serialisation and strict mode automatically.
+                    # The text.format block is replaced by the text_format parameter.
+                    del request["text"]
+                    response = self.client.responses.parse(
+                        **request,
+                        text_format=output_schema,
+                    )
+                else:
+                    response = self.client.responses.create(**request)
+
+                latency = time.time() - start_time
                 result = parse_output(response, item_id, latency)
             except Exception as e:
                 print(e)
@@ -177,7 +229,8 @@ class OpenAIClient(Generic[I, O]):
             format_input: Callable[[I], str],
             parse_output: Callable[[Response, str, float], O],
             get_id: Callable[[I, int], str] = lambda x, idx: x['id'] if 'id' in x else f'item-{idx}',
-            batch_size: int = 1
+            batch_size: int = 1,
+            output_schema: Optional[type[BaseModel]] = None,
     ) -> list:
         self.working_dir.mkdir(parents=True, exist_ok=True)
         results = dict()
@@ -204,21 +257,21 @@ class OpenAIClient(Generic[I, O]):
                 system_prompt=system_prompt,
                 format_input=format_input,
                 get_id=get_id,
+                output_schema=output_schema,
             )
+
             start_time = time.time()
             batch_id = self._submit_batch(batch_file)
             status = self._wait_for_batch(batch_id)
 
             if status != "completed":
-                raise RuntimeError(
-                    f"Batch {batch_id} ended with status: {status}"
-                )
+                raise RuntimeError(f"Batch {batch_id} ended with status: {status}")
 
             latency = time.time() - start_time
             batch_results = self._load_batch_results(
                 batch_id=batch_id,
                 parse_output=parse_output,
-                latency=latency
+                latency=latency,
             )
             results.update(batch_results)
 
@@ -233,15 +286,28 @@ class OpenAIClient(Generic[I, O]):
     def _build_batch_file(
             self,
             batch_num: int,
-            dataset_subset: list[str],
+            dataset_subset: list[I],
             tools: list[dict],
             start_idx: int,
             system_prompt: str,
             format_input: Callable[[I], str],
             get_id: Callable[[I, int], str],
+            output_schema: Optional[type[BaseModel]] = None,
     ) -> Path:
         """Builds JSONL batch file for a subset of the dataset."""
         batch_file = self.working_dir / f"batch-{batch_num:04d}.jsonl"
+
+        # .parse() is not available for batch JSONL — build the strict schema manually.
+        text_format = (
+            {
+                "type": "json_schema",
+                "name": output_schema.__name__,
+                "schema": _pydantic_to_strict_schema(output_schema),
+                "strict": True,
+            }
+            if output_schema is not None
+            else {"type": "text"}
+        )
 
         with open(batch_file, "w", encoding="utf-8") as f:
             for local_idx, item in enumerate(dataset_subset):
@@ -258,11 +324,12 @@ class OpenAIClient(Generic[I, O]):
                         "temperature": self.temperature,
                         "reasoning": {"effort": self.reasoning_effort},
                         "tools": tools,
+                        "text": {"format": text_format},
                         "input": [
                             {"role": "developer", "content": system_prompt},
-                            {"role": "user", "content": format_input(item)}
-                        ]
-                    }
+                            {"role": "user", "content": format_input(item)},
+                        ],
+                    },
                 }
 
                 f.write(json.dumps(request) + "\n")
@@ -277,7 +344,7 @@ class OpenAIClient(Generic[I, O]):
         batch = self.client.batches.create(
             input_file_id=uploaded_file.id,
             endpoint="/v1/responses",
-            completion_window='24h',
+            completion_window="24h",
         )
 
         return batch.id
@@ -303,13 +370,12 @@ class OpenAIClient(Generic[I, O]):
             self,
             batch_id: str,
             parse_output: Callable[[Response, str, float], O],
-            latency: float
-    ) -> dict[str, str]:
+            latency: float,
+    ) -> dict[str, O]:
         """Parses results from a completed batch."""
         batch = self.client.batches.retrieve(batch_id)
 
-        output_file_id = batch.output_file_id
-        content = self.client.files.content(output_file_id)
+        content = self.client.files.content(batch.output_file_id)
 
         results = {}
         for line in content.iter_lines():
@@ -319,8 +385,7 @@ class OpenAIClient(Generic[I, O]):
 
             try:
                 response = Response.model_validate(response_dict)
-                result = parse_output(response, custom_id, latency)
-                results[custom_id] = result
+                results[custom_id] = parse_output(response, custom_id, latency)
             except Exception as e:
                 print(e)
                 results[custom_id] = None
@@ -331,7 +396,7 @@ class OpenAIClient(Generic[I, O]):
             self,
             batch_id: str,
             parse_output: Callable[[Response, str, float], O],
-            latency: float = 0.0
+            latency: float = 0.0,
     ) -> dict[str, O]:
         """
         Recovers results from a previously completed batch.
@@ -355,9 +420,7 @@ class OpenAIClient(Generic[I, O]):
             )
 
         if not batch.output_file_id:
-            raise RuntimeError(
-                f"Batch {batch_id} has no output file available"
-            )
+            raise RuntimeError(f"Batch {batch_id} has no output file available")
 
         total = batch.request_counts.total
         completed = batch.request_counts.completed
